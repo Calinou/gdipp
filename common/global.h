@@ -1,10 +1,5 @@
 #pragma once
 
-#include <string>
-using namespace std;
-
-typedef basic_string<TCHAR> t_string;
-
 template <typename T>
 class singleton
 {
@@ -46,10 +41,20 @@ public:
 	}
 };
 
-void get_dir_file_path(TCHAR source_path[MAX_PATH], const TCHAR *file_name, HMODULE h_module = NULL);
+/*
+GDIPP_SERVICE: gdimm.dll monitors the injector process, and unload itself once the injector process is terminated
+GDIPP_LOADER: gdimm.dll does not care about the injector
+*/
+enum INJECTOR_TYPE
+{
+	GDIPP_SERVICE,
+	GDIPP_LOADER
+};
+
+void get_dir_file_path(WCHAR source_path[MAX_PATH], const WCHAR *file_name, HMODULE h_module = NULL);
 
 void debug_output_process_name();
-void debug_output(const TCHAR *str = TEXT(""));
-void debug_output(const TCHAR *str, unsigned int c);
+void debug_output(const WCHAR *str = L"");
+void debug_output(const WCHAR *str, unsigned int c);
 void debug_output(const void *ptr, unsigned int size);
-void debug_output(DWORD num);
+void debug_output(long num);

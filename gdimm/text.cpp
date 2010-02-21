@@ -2,14 +2,12 @@
 #include "text.h"
 #include "ft.h"
 #include "font_man.h"
+#include "font_link.h"
 #include "setting.h"
 #include FT_INTERNAL_OBJECTS_H	// for FT_PAD_CEIL
 #include <cmath>
-#include <vector>
-using namespace std;
 
 const FT_Glyph_Class *glyph_clazz = NULL;
-const double pi = 4 * atan(1.0);
 
 // convert 16.16 fixed float type to 26.6 format
 inline FT_F26Dot6 to_26dot6(const FIXED &fixed)
@@ -46,17 +44,6 @@ inline int get_pitch(int width, WORD bpp)
 	return FT_PAD_CEIL((int) ceil((double)(width * bpp) / 8), sizeof(LONG));
 }
 
-_gdimm_text::_gdimm_text()
-{
-	_metric_buf = NULL;
-}
-
-_gdimm_text::~_gdimm_text()
-{
-	if (_metric_buf != NULL)
-		delete[] _metric_buf;
-}
-
 int _gdimm_text::get_ft_bmp_width(const FT_Bitmap &bitmap)
 {
 	if (bitmap.pixel_mode == FT_PIXEL_MODE_LCD)
@@ -66,7 +53,7 @@ int _gdimm_text::get_ft_bmp_width(const FT_Bitmap &bitmap)
 }
 
 // for given DC bitmap bit count, return the corresponding FT_Glyph_To_Bitmap render mode
-FT_Render_Mode _gdimm_text::get_render_mode(WORD dc_bpp) const
+FT_Render_Mode _gdimm_text::get_render_mode(WORD dc_bpp, const WCHAR *font_family) const
 {
 	// non-antialiased font
 	// draw with monochrome mode
@@ -81,10 +68,36 @@ FT_Render_Mode _gdimm_text::get_render_mode(WORD dc_bpp) const
 		return FT_RENDER_MODE_NORMAL;
 	case 24:
 	case 32:
-		return (gdimm_setting::instance().get_value<bool>(TEXT("gray_render")) ? FT_RENDER_MODE_NORMAL : FT_RENDER_MODE_LCD);
+		return (gdimm_setting::instance().get_gdimm_setting<bool>(L"subpixel_render", font_family) ? FT_RENDER_MODE_LCD : FT_RENDER_MODE_NORMAL);
 	default:
 		return FT_RENDER_MODE_NORMAL;
 	}
+}
+
+FT_UInt32 _gdimm_text::get_load_mode(FT_Render_Mode render_mode, const WCHAR *font_family) const
+{
+	FT_UInt32 load_flag;
+
+	if (gdimm_setting::instance().get_gdimm_setting<bool>(L"hinting", font_family))
+	{
+		const bool auto_hinting = gdimm_setting::instance().get_gdimm_setting<bool>(L"auto_hinting", font_family);
+		const bool light_mode = gdimm_setting::instance().get_gdimm_setting<bool>(L"light_mode", font_family);
+		load_flag = (auto_hinting ? FT_LOAD_FORCE_AUTOHINT : FT_LOAD_DEFAULT);
+
+		switch (render_mode)
+		{
+		case FT_RENDER_MODE_NORMAL:
+			load_flag |= (light_mode ? FT_LOAD_TARGET_LIGHT : FT_LOAD_TARGET_NORMAL);
+		case FT_RENDER_MODE_MONO:
+			load_flag |= FT_LOAD_TARGET_MONO;
+		case FT_RENDER_MODE_LCD:
+			load_flag |= (light_mode ? FT_LOAD_TARGET_LIGHT : FT_LOAD_TARGET_LCD);
+		}
+	}
+	else
+		load_flag = FT_LOAD_NO_HINTING;
+
+	return load_flag;
 }
 
 void _gdimm_text::draw_background(HDC hdc, const RECT *bg_rect, COLORREF bg_color)
@@ -102,19 +115,17 @@ void _gdimm_text::draw_background(HDC hdc, const RECT *bg_rect, COLORREF bg_colo
 	DeleteObject(bg_brush);
 }
 
-int _gdimm_text::get_dc_bpp() const
-{
-	int i_ret;
+ULONGLONG start, gd = 0, go = 0, cc = 0;
 
+BITMAP _gdimm_text::get_dc_bmp() const
+{
 	const HBITMAP dc_bitmap = (HBITMAP) GetCurrentObject(_hdc_text, OBJ_BITMAP);
 	assert(dc_bitmap != NULL);
 
-	BITMAPINFO bmi = {0};
-	bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-	i_ret = GetDIBits(_hdc_text, dc_bitmap, 0, 0, NULL, &bmi, DIB_RGB_COLORS);
-	assert(i_ret != 0);
+	BITMAP bmp = {0};
+	GetObject(dc_bitmap, sizeof(BITMAP), &bmp);
 
-	return bmi.bmiHeader.biBitCount;
+	return bmp;
 }
 
 // get various metrics of the DC
@@ -148,17 +159,18 @@ void _gdimm_text::get_glyph_clazz()
 	use the clazz for all subsequent FT_OutlineGlyph
 	*/
 
-	const TCHAR *font_full_name = get_full_name();
-	unsigned int font_index = gdimm_font_man::instance().lookup_index(_hdc_text, font_full_name);
-
 	FT_Error ft_error;
-	const FTC_FaceID face_id = (FTC_FaceID) font_index;
+
+	const HFONT curr_hfont = (HFONT) GetCurrentObject(_hdc_text, OBJ_FONT);
+	const long font_id = gdimm_font_man::instance().register_font(curr_hfont, L"", L"");
+
+	const FTC_FaceID ft_face_id = (FTC_FaceID) font_id;
 
 	FT_Face font_face;
-	ft_error = FTC_Manager_LookupFace(ft_cache_man, face_id, &font_face);
+	ft_error = FTC_Manager_LookupFace(ft_cache_man, ft_face_id, &font_face);
 	assert(ft_error == 0);
 
-	FTC_ScalerRec cache_scale = {face_id, 0, 0, 1, 0, 0};
+	FTC_ScalerRec cache_scale = {ft_face_id, 0, 0, 1, 0, 0};
 	FT_Size font_size;
 	ft_error = FTC_Manager_LookupSize(ft_cache_man, &cache_scale, &font_size);
 	assert(ft_error == 0);
@@ -172,14 +184,14 @@ void _gdimm_text::get_glyph_clazz()
 	FT_Done_Glyph(useless);
 }
 
-FT_BitmapGlyph _gdimm_text::get_glyph_bmp(
+FT_BitmapGlyph _gdimm_text::outline_to_bitmap(
 	WCHAR ch,
 	UINT ggo_format,
 	const MAT2 &matrix,
 	FT_Render_Mode render_mode,
+	float bold_strength,
 	GLYPHMETRICS &glyph_metrics) const
 {
-
 	FT_Error ft_error;
 
 	DWORD outline_buf_len = GetGlyphOutline(_hdc_text, ch, ggo_format, &glyph_metrics, 0, NULL, &matrix);
@@ -285,7 +297,6 @@ FT_BitmapGlyph _gdimm_text::get_glyph_bmp(
 		}
 	};
 
-	const float bold_strength = gdimm_setting::instance().get_value<float>(TEXT("bold_strength"));
 	ft_error = FT_Outline_Embolden(&outline_glyph.outline, to_26dot6(bold_strength));
 	assert(ft_error == 0);
 
@@ -302,8 +313,8 @@ void _gdimm_text::set_bmp_bits_mono(
 	int x_in_dest, int y_in_dest,
 	BYTE *dest_bits,
 	int dest_width, int dest_height,
-	bool is_dest_up,
-	WORD dest_bpp) const
+	WORD dest_bpp,
+	bool is_dest_up) const
 {
 	// the source bitmap is 1-bit, 8 pixels per byte, in most-significant order
 	// the destination is an non antialiased bitmap with ANY bpp
@@ -353,8 +364,8 @@ void _gdimm_text::set_bmp_bits_gray(
 	int x_in_dest, int y_in_dest,
 	BYTE *dest_bits,
 	int dest_width, int dest_height,
-	bool is_dest_up,
-	WORD dest_bpp) const
+	WORD dest_bpp,
+	bool is_dest_up) const
 {
 	// the source bitmap is 24-bit, 3 bytes per pixel, in order of R, G, B channels
 	// the destination bitmaps is 8-, 24- or 32-bit, each row is aligned to DWORD
@@ -391,8 +402,8 @@ void _gdimm_text::set_bmp_bits_gray(
 				dest_bits[dest_ptr+2] = (src_gray * _fg_rgb.rgbRed + (255 - src_gray) * dest_bits[dest_ptr+2]) / 255;
 			}
 
-			if (dest_bpp == 32)
-				dest_bits[dest_ptr+3] = 0;
+			//if (dest_bpp == 32 && _bg_color == 0x00ffffff)
+			//	dest_bits[dest_ptr+3] = 0;
 		}
 	}
 }
@@ -402,8 +413,8 @@ void _gdimm_text::set_bmp_bits_lcd(
 	int x_in_dest, int y_in_dest,
 	BYTE *dest_bits,
 	int dest_width, int dest_height,
-	bool is_dest_up,
-	WORD dest_bpp) const
+	WORD dest_bpp,
+	bool is_dest_up) const
 {
 	// the source bitmap is 24-bit, 3 bytes per pixel, in order of R, G, B channels
 	// the destination bitmaps is 24- or 32-bit, 3(4) bytes per pixel, in order of B, G, R, (A) channels
@@ -442,12 +453,11 @@ void _gdimm_text::set_bmp_bits_lcd(
 			dest_bits[dest_ptr+1] = (src_g * _fg_rgb.rgbGreen + (255 - src_g) * dest_bits[dest_ptr+1]) / 255;
 			dest_bits[dest_ptr+2] = (src_r * _fg_rgb.rgbRed + (255 - src_r) * dest_bits[dest_ptr+2]) / 255;
 
-			if (dest_bpp == 32)
-				dest_bits[dest_ptr+3] = 0;
+			//if (dest_bpp == 32 && _bg_color == 0x00ffffff)
+			//	dest_bits[dest_ptr+3] = 1;
 		}
 	}
 }
-
 
 /*
 1. set up metrics
@@ -459,8 +469,9 @@ return true if successfully draw the bitmap, otherwise return false
 bool _gdimm_text::draw_glyphs(
 	const vector<FT_BitmapGlyph> &glyphs,
 	const vector<POINT> &glyph_pos,
+	int max_glyph_height,
 	CONST RECT *lprect,
-	int dc_bpp) const
+	const BITMAP &dc_bmp) const
 {
 	BOOL b_ret;
 
@@ -474,23 +485,22 @@ bool _gdimm_text::draw_glyphs(
 
 	// actual width of the source bitmap
 	const size_t last_glyph = glyphs.size() - 1;
-	const int bmp_width = glyph_pos[last_glyph].x + get_ft_bmp_width(glyphs[last_glyph]->bitmap) - src_origin.x;
-	
-	// movement of the bitmap in y direction when generating. 0 for non-rotated text
-	const int bmp_y_offset = abs(_cursor.y - src_origin.y);
+	const int text_width = glyph_pos[last_glyph].x + get_ft_bmp_width(glyphs[last_glyph]->bitmap) - src_origin.x;
+	const int bmp_width = max(text_width, _cursor.x - glyph_pos[0].x);
 
 	// height of the bitmap that will be drawn
-	const int bmp_height = max(glyphs[0]->bitmap.rows + bmp_y_offset, cell_height);
+	const int bmp_height = max(max_glyph_height, cell_height);
 
-	// the part of actual ascent higher than the cell ascent
-	const int bmp_extra_ascent = max(glyphs[0]->top - _outline_metrics->otmTextMetrics.tmAscent, 0);
+	const int bmp_extra_height = max(bmp_height - cell_height, 0);
 
 	// ascent that will be applied when drawing the bitmap
-	const int bmp_ascent = _outline_metrics->otmTextMetrics.tmAscent + bmp_extra_ascent;
+	const int bmp_ascent = _outline_metrics->otmTextMetrics.tmAscent + bmp_extra_height;
 
 	// position where the bitmap will be finally drawn if no clipping is needed
 	POINT dest_origin = src_origin;
-	dest_origin.y -= bmp_extra_ascent;
+
+	// make sure the bottom of the bitmap is within the cell
+	dest_origin.y -= bmp_extra_height;
 
 	switch ((TA_LEFT | TA_RIGHT | TA_CENTER) & _text_alignment)
 	{
@@ -521,8 +531,8 @@ bool _gdimm_text::draw_glyphs(
 	bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
 	bmi.bmiHeader.biWidth = bmp_width;
 	bmi.bmiHeader.biHeight = bmp_height;
-	bmi.bmiHeader.biPlanes = GetDeviceCaps(_hdc_text, PLANES);
-	bmi.bmiHeader.biBitCount = dc_bpp;
+	bmi.bmiHeader.biPlanes = dc_bmp.bmPlanes;
+	bmi.bmiHeader.biBitCount = dc_bmp.bmBitsPixel;
 	bmi.bmiHeader.biCompression = BI_RGB;
 
 	BYTE *dest_bits;
@@ -541,23 +551,25 @@ bool _gdimm_text::draw_glyphs(
 
 	if (_eto_options & ETO_OPAQUE)
 		draw_background(_hdc_text, lprect, _bg_color);
-
-	if (GetBkMode(_hdc_text) == OPAQUE)
+	
+	const int bk_mode = GetBkMode(_hdc_text);
+	if (bk_mode == OPAQUE)
 	{
 		RECT bk_rect = {0, 0, bmp_width, bmp_height};
 		draw_background(hdc_canvas, &bk_rect, _bg_color);
+		b_ret = TRUE;
 	}
-	else
-	{
-		b_ret = BitBlt(hdc_canvas, 0, 0, bmp_width, bmp_height, _hdc_text, dest_origin.x, dest_origin.y, SRCCOPY);
-
+	else if (bk_mode == TRANSPARENT)
 		// "If a rotation or shear transformation is in effect in the source device context, BitBlt returns an error"
-		if (!b_ret)	
-		{
-			DeleteObject(dest_bitmap);
-			DeleteDC(hdc_canvas);
-			return false;
-		}
+		b_ret = BitBlt(hdc_canvas, 0, 0, bmp_width, bmp_height, _hdc_text, dest_origin.x, dest_origin.y, SRCCOPY);
+	else
+		b_ret = FALSE;
+
+	if (!b_ret)	
+	{
+		DeleteObject(dest_bitmap);
+		DeleteDC(hdc_canvas);
+		return false;
 	}
 
 	// 3.
@@ -582,24 +594,24 @@ bool _gdimm_text::draw_glyphs(
 				x_in_dest, y_in_dest,
 				dest_bits,
 				bmp_width, bmp_height,
-				bmp_height > 0,
-				dc_bpp);
+				dc_bmp.bmBitsPixel,
+				bmp_height > 0);
 			break;
 		case FT_PIXEL_MODE_GRAY:
 			set_bmp_bits_gray(glyphs[i]->bitmap,
 				x_in_dest, y_in_dest,
 				dest_bits,
 				bmp_width, bmp_height,
-				bmp_height > 0,
-				dc_bpp);
+				dc_bmp.bmBitsPixel,
+				bmp_height > 0);
 			break;
 		case FT_PIXEL_MODE_LCD:
 			set_bmp_bits_lcd(glyphs[i]->bitmap,
 				x_in_dest, y_in_dest,
 				dest_bits,
 				bmp_width, bmp_height,
-				bmp_height > 0,
-				dc_bpp);
+				dc_bmp.bmBitsPixel,
+				bmp_height > 0);
 			break;
 		}
 	}
@@ -637,14 +649,294 @@ bool _gdimm_text::draw_glyphs(
 	return true;
 }
 
-const TCHAR *_gdimm_text::get_family_name() const
+/*
+as its name
+return true it processed the text 
+return false if it cannot deal with the text (let original ExtTextOutW handle)
+*/
+bool _gdimm_text::text_out_ggo(const WCHAR *lpString, UINT c, CONST RECT *lprect, CONST INT *lpDx)
 {
-	return (const TCHAR*)(_metric_buf + (UINT) _outline_metrics->otmpFamilyName);
+	BOOL b_ret;
+
+	const BITMAP dc_bmp = get_dc_bmp();
+
+	// the bitmap of the DC has been unavailable
+	if (dc_bmp.bmBitsPixel == 0)
+		return false;
+
+	const FT_Render_Mode render_mode = get_render_mode(dc_bmp.bmBitsPixel, get_font_family());
+
+	// Windows renders monochrome bitmap better than FreeType
+	if (render_mode == FT_RENDER_MODE_MONO && !gdimm_setting::instance().get_gdimm_setting<bool>(L"render_mono", get_font_family()))
+		return false;
+	
+	// is ETO_PDY is set, lpDx contains both x increment and y displacement
+	const int dx_factor = ((_eto_options & ETO_PDY) ? 2 : 1);
+
+	// identity matrix
+	const MAT2 id_matrix = {{0, 1}, {0, 0}, {0, 0}, {0, 1}};
+
+	/*
+	GetGlyphOutline is capable of returning cubic B¨¦zier curves
+	although it generally require less points to define a curve with cubic rather than quadratic B¨¦zier curves,
+	TrueType fonts internally store curves with quadratic B¨¦zier curves
+	GetGlyphOutline has to do conversion, which takes time, and generates more points
+	therefore, quadratic B¨¦zier curves are more favored
+	*/
+	UINT ggo_format = GGO_NATIVE;
+	if (_eto_options & ETO_GLYPH_INDEX)
+		ggo_format |= GGO_GLYPH_INDEX;
+	if (!gdimm_setting::instance().get_gdimm_setting<bool>(L"hinting", get_font_family()))
+		ggo_format |= GGO_UNHINTED;
+
+	const float bold_strength = gdimm_setting::instance().get_gdimm_setting<float>(L"bold_strength", get_font_family());
+
+	vector<FT_BitmapGlyph> glyphs;
+	vector<POINT> glyph_pos;
+	int max_glyph_height = 0;
+
+	for (unsigned int i = 0; i < c; i++)
+	{
+		// we do not care about non-printable characters
+		// solution for Windows Vista/7 Date
+		if (!(_eto_options & ETO_GLYPH_INDEX) && !iswprint(lpString[i]))
+			continue;
+
+		GLYPHMETRICS glyph_metrics;
+		FT_BitmapGlyph bmp_glyph = outline_to_bitmap(
+			lpString[i],
+			ggo_format,
+			id_matrix,
+			render_mode,
+			bold_strength,
+			glyph_metrics);
+
+		if (bmp_glyph != NULL)
+		{
+			POINT adjusted_pos = _cursor;
+			adjusted_pos.x += bmp_glyph->left;
+
+			glyphs.push_back(bmp_glyph);
+			glyph_pos.push_back(adjusted_pos);
+			max_glyph_height = max(max_glyph_height, bmp_glyph->bitmap.rows);
+		}
+
+		POINT glyph_advance = {0, glyph_metrics.gmCellIncY};
+		const LONG char_advance = glyph_metrics.gmCellIncX + _char_extra;
+
+		if (lpDx == NULL)
+			glyph_advance.x = char_advance;
+		else
+		{
+			glyph_advance.x = lpDx[i * dx_factor];
+
+			// the last element in lpDx may be 0
+			// in that case, we use the character advancement
+			if (i == c - 1 && glyph_advance.x == 0)
+				glyph_advance.x = char_advance;
+		}
+
+		_cursor.x += glyph_advance.x;
+		_cursor.y += glyph_advance.y;
+	}
+	
+	// if TA_UPDATECP is set, update current position after text out
+	if (_update_cursor)
+	{
+		b_ret = MoveToEx(_hdc_text, _cursor.x, _cursor.y, NULL);
+		assert(b_ret);
+	}
+
+	bool draw_success = false;
+	if (!glyphs.empty())
+	{
+		draw_success = draw_glyphs(glyphs, glyph_pos, max_glyph_height, lprect, dc_bmp);
+		
+		for (size_t i = 0; i < glyphs.size(); i++)
+		{
+			FT_Done_Glyph((FT_Glyph) glyphs[i]);
+			// the FT_OutlineGlyph is manually constructed, no need to destroy it
+		}
+	}
+
+	return draw_success;
 }
 
-const TCHAR *_gdimm_text::get_full_name() const
+/*
+as its name
+return true it processed the text 
+return false if it cannot deal with the text (let original ExtTextOutW handle)
+*/
+bool _gdimm_text::text_out_ft(LPCWSTR lpString, UINT c, CONST RECT *lprect, CONST INT *lpDx)
 {
-	return (const TCHAR*)(_metric_buf + (UINT) _outline_metrics->otmpFullName);
+	BOOL b_ret;
+	FT_Error ft_error;
+
+	const BITMAP dc_bmp = get_dc_bmp();
+
+	// the bitmap of the DC has been unavailable
+	if (dc_bmp.bmBitsPixel == 0)
+		return false;
+
+	FT_Render_Mode render_mode = get_render_mode(dc_bmp.bmBitsPixel, get_font_family());
+
+	// Windows renders monochrome bitmap better than FreeType
+	if (render_mode == FT_RENDER_MODE_MONO && !gdimm_setting::instance().get_gdimm_setting<bool>(L"render_mono", get_font_family()))
+		return false;
+
+	// is ETO_PDY is set, lpDx contains both x increment and y displacement
+	const int dx_factor = ((_eto_options & ETO_PDY) ? 2 : 1);
+
+	// font face setup
+	const WCHAR *dc_font_family = get_font_family();
+	const WCHAR *final_font_family = dc_font_family;
+	const WCHAR *font_style = get_font_style();
+	const HFONT curr_hfont = (HFONT) GetCurrentObject(_hdc_text, OBJ_FONT);
+	long font_id = gdimm_font_man::instance().register_font(curr_hfont, dc_font_family, font_style);
+	FTC_FaceID ft_face_id = (FTC_FaceID) font_id;
+	const size_t link_count = gdimm_font_link::instance().get_link_count(dc_font_family);
+	int link_index = 0;
+
+	// glyph metrics setup
+	const LONG glyph_height = _outline_metrics->otmTextMetrics.tmHeight - _outline_metrics->otmTextMetrics.tmInternalLeading;
+	LONG glyph_width = glyph_height;
+	if (_font_attr.lfWidth == 0 || _wcsicmp(_font_attr.lfFaceName, get_font_family()) != 0)
+		// use device aspect
+		glyph_width = MulDiv(glyph_height, _outline_metrics->otmTextMetrics.tmDigitizedAspectX, _outline_metrics->otmTextMetrics.tmDigitizedAspectY);
+	else
+		glyph_width = _font_attr.lfWidth;
+	FTC_ImageTypeRec img_type = {0, glyph_width, glyph_height, get_load_mode(render_mode, final_font_family)};
+
+	vector<FT_BitmapGlyph> glyphs;
+	vector<POINT> glyph_pos;
+	int max_glyph_height = 0;
+	
+	for (unsigned int i = 0; i < c; i++)
+	{
+		FT_UInt glyph_index;
+		bool font_linked = false;
+
+		if (_eto_options & ETO_GLYPH_INDEX)
+			glyph_index = lpString[i];
+		else
+		{
+			// we do not care about non-printable characters
+			// solution for Windows Vista/7 Date
+			if (!iswprint(lpString[i]))
+				continue;
+
+			int link_times = 0;
+			while (true)
+			{
+				// character code -> glyph index lookup
+				glyph_index = FTC_CMapCache_Lookup(ft_cmap_cache, ft_face_id, -1, lpString[i]);
+
+				// break if either find the glyph index, or exhaust the font link count
+				if (glyph_index != 0 || link_times == link_count)
+					break;
+
+				// do font linking
+				final_font_family = gdimm_font_link::instance().lookup(dc_font_family, link_index);
+				link_index++;
+				link_times++;
+				font_linked = true;
+
+				// round-robin
+				if (final_font_family == NULL)
+				{
+					link_index = 0;
+					final_font_family = dc_font_family;
+				}
+
+				font_id = gdimm_font_man::instance().lookup_font(_font_attr, final_font_family, font_style);
+				ft_face_id = (FTC_FaceID) font_id;
+			}
+		}
+
+		// glyph index -> glyph outline lookup
+
+		// use load mode for the new font family
+		img_type.face_id = ft_face_id;
+
+		// if font linked, get the render mode and load mode for the new font family
+		if (font_linked)
+		{
+			render_mode = get_render_mode(dc_bmp.bmBitsPixel, final_font_family);
+			img_type.flags = get_load_mode(render_mode, final_font_family);
+		}
+		
+		FT_Glyph glyph;
+		ft_error = FTC_ImageCache_Lookup(ft_glyph_cache, &img_type, glyph_index, &glyph, NULL);
+		if (ft_error != 0)
+			return false;
+
+		// some fonts are embedded with pre-rendered glyph bitmap
+		// in that case, use original ExtTextOutW
+		if (glyph->format != FT_GLYPH_FORMAT_OUTLINE)
+			return false;
+
+		// glyph outline -> glyph bitmap conversion
+		const float bold_strength = gdimm_setting::instance().get_gdimm_setting<float>(L"bold_strength", final_font_family);
+		if (bold_strength != 0)
+		{
+			FT_Glyph src_glyph = glyph;
+			FT_Glyph_Copy(src_glyph, &glyph);
+			ft_error = FT_Outline_Embolden(&((FT_OutlineGlyph) glyph)->outline, to_26dot6(bold_strength));
+			assert(ft_error == 0);
+
+			FT_Glyph_To_Bitmap(&glyph, render_mode, NULL, TRUE);
+		}
+		else
+			FT_Glyph_To_Bitmap(&glyph, render_mode, NULL, FALSE);
+		
+		FT_BitmapGlyph bmp_glyph = (FT_BitmapGlyph) glyph;
+		max_glyph_height = max(max_glyph_height, bmp_glyph->bitmap.rows);
+
+		if (bmp_glyph != NULL)
+		{
+			POINT adjusted_pos = _cursor;
+			adjusted_pos.x += bmp_glyph->left;
+
+			glyphs.push_back(bmp_glyph);
+			glyph_pos.push_back(adjusted_pos);
+		}
+
+		POINT glyph_advance = {0, from_16dot16(bmp_glyph->root.advance.y)};
+		const LONG char_advance = from_16dot16(bmp_glyph->root.advance.x) + _char_extra;
+
+		if (lpDx == NULL)
+			glyph_advance.x = char_advance;
+		else
+		{
+			glyph_advance.x = lpDx[i * dx_factor];
+
+			// the last element in lpDx may be 0
+			// in that case, we use the character advancement
+			if (i == c - 1 && glyph_advance.x == 0)
+				glyph_advance.x = char_advance;
+		}
+
+		_cursor.x += glyph_advance.x;
+		_cursor.y += glyph_advance.y;
+	}
+	
+	// if TA_UPDATECP is set, update current position after text out
+	if (_update_cursor)
+	{
+		b_ret = MoveToEx(_hdc_text, _cursor.x, _cursor.y, NULL);
+		assert(b_ret);
+	}
+
+	bool draw_success = false;
+	if (!glyphs.empty())
+	{
+		draw_success = draw_glyphs(glyphs, glyph_pos, max_glyph_height, lprect, dc_bmp);
+
+		for (size_t i = 0; i < glyphs.size(); i++)
+			FT_Done_Glyph((FT_Glyph) glyphs[i]);
+	}
+	
+	return draw_success;
 }
 
 bool _gdimm_text::init(HDC hdc, int x, int y, UINT options)
@@ -654,14 +946,16 @@ bool _gdimm_text::init(HDC hdc, int x, int y, UINT options)
 	if (!get_dc_metrics())
 		return false;
 
-	const LONG max_height = gdimm_setting::instance().get_value<LONG>(TEXT("max_height"));
+	if (gdimm_setting::instance().is_name_excluded(get_font_family()))
+		return false;
+
+	// ignore rotated DC
+	if (_font_attr.lfEscapement % 3600 != 0)
+		return false;
+
+	const LONG max_height = gdimm_setting::instance().get_gdimm_setting<LONG>(L"max_height", get_font_family());
 	if (max_height != 0 && max_height < _outline_metrics->otmTextMetrics.tmHeight)
 		return false;
-	
-	// since we only deal with fonts with outlines, the glyph clazz must be ft_outline_glyph_class
-	// therefore this function is called only once
-	if (glyph_clazz == NULL)
-		get_glyph_clazz();
 
 	_eto_options = options;
 
@@ -699,102 +993,17 @@ bool _gdimm_text::init(HDC hdc, int x, int y, UINT options)
 	return true;
 }
 
-/*
-as its name
-return true it processed the text 
-return false if it cannot deal with the text (let original ExtTextOutW handle)
-*/
-bool _gdimm_text::text_out(const WCHAR *string, unsigned int count, CONST RECT *lprect, CONST INT *lpDx)
+bool _gdimm_text::text_out(LPCWSTR lpString, UINT c, CONST RECT *lprect, CONST INT *lpDx)
 {
-	if (_font_attr.lfEscapement % 3600 != 0)
-		return false;
-
-	BOOL b_ret;
-	
-	// is ETO_PDY is set, lpDx contains both x increment and y displacement
-	const int dx_factor = ((_eto_options & ETO_PDY) ? 2 : 1);
-
-	// identity matrix
-	const MAT2 id_matrix = {{0, 1}, {0, 0}, {0, 0}, {0, 1}};
-
-	/*
-	GetGlyphOutline is capable of returning cubic B¨¦zier curves
-	although it generally require less points to define a curve with cubic rather than quadratic B¨¦zier curves,
-	TrueType fonts internally store curves with quadratic B¨¦zier curves
-	GetGlyphOutline has to do conversion, which takes time, and generates more points
-	therefore, quadratic B¨¦zier curves are more favored
-	*/
-	UINT ggo_format = GGO_NATIVE;
-	if (_eto_options & ETO_GLYPH_INDEX)
-		ggo_format |= GGO_GLYPH_INDEX;
-	if (!gdimm_setting::instance().get_value<bool>(TEXT("hinting")))
-		ggo_format |= GGO_UNHINTED;
-
-	const int dc_bpp = get_dc_bpp();
-	const FT_Render_Mode render_mode = get_render_mode(dc_bpp);
-
-	// Windows renders monochrome bitmap better than FreeType
-	if (render_mode == FT_RENDER_MODE_MONO && !gdimm_setting::instance().get_value<bool>(TEXT("render_mono")))
-		return false;
-
-	vector<FT_BitmapGlyph> glyphs;
-	vector<POINT> glyph_pos;
-
-	for (unsigned int i = 0; i < count; i++)
+	if (gdimm_setting::instance().get_gdimm_setting<bool>(L"freetype_loader", get_font_family()))
+		return text_out_ft(lpString, c, lprect, lpDx);
+	else
 	{
-		// we do not care about non-printable characters
-		if (!(_eto_options & ETO_GLYPH_INDEX) && !iswprint(string[i]))
-			continue;
+		// since we only deal with fonts with outlines, the glyph clazz must be ft_outline_glyph_class
+		// therefore this function is called only once
+		if (glyph_clazz == NULL)
+			get_glyph_clazz();
 
-		GLYPHMETRICS glyph_metrics;
-		FT_BitmapGlyph bmp_glyph = get_glyph_bmp(string[i], ggo_format, id_matrix, render_mode, glyph_metrics);
-
-		if (bmp_glyph)
-		{
-			POINT adjusted_pos = _cursor;
-			adjusted_pos.x += bmp_glyph->left;
-
-			glyphs.push_back(bmp_glyph);
-			glyph_pos.push_back(adjusted_pos);
-		}
-
-		POINT glyph_advance = {0, glyph_metrics.gmCellIncY};
-		const LONG char_advance = glyph_metrics.gmCellIncX + _char_extra;
-
-		if (lpDx == NULL)
-			glyph_advance.x = char_advance;
-		else
-		{
-			glyph_advance.x = lpDx[i * dx_factor];
-
-			// the last element in lpDx may be 0
-			// in that case, we use the character advancement
-			if (i == count - 1 && glyph_advance.x == 0)
-				glyph_advance.x = char_advance;
-		}
-
-		_cursor.x += glyph_advance.x;
-		_cursor.y += glyph_advance.y;
+		return text_out_ggo(lpString, c, lprect, lpDx);
 	}
-	
-	// if TA_UPDATECP is set, update current position after text out
-	if (_update_cursor)
-	{
-		b_ret = MoveToEx(_hdc_text, _cursor.x, _cursor.y, NULL);
-		assert(b_ret);
-	}
-
-	bool draw_success = false;
-	if (!glyphs.empty())
-	{
-		draw_success = draw_glyphs(glyphs, glyph_pos, lprect, dc_bpp);
-		
-		for (size_t i = 0; i < glyphs.size(); i++)
-		{
-			FT_Done_Glyph((FT_Glyph) glyphs[i]);
-			// the FT_OutlineGlyph is manually constructed, no need to destroy it
-		}
-	}
-	
-	return draw_success;
 }

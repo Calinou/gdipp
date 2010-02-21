@@ -22,10 +22,6 @@ BOOL APIENTRY DllMain( HMODULE hModule,
 		initialize_freetype();
 		return gdimm_hook::instance().hook();
 
-	case DLL_THREAD_ATTACH:
-	case DLL_THREAD_DETACH:
-		break;
-
 	case DLL_PROCESS_DETACH:
 		gdimm_hook::instance().unhook();
 		destroy_freetype();

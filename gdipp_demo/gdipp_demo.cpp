@@ -1,6 +1,3 @@
-// demo.cpp : Defines the entry point for the application.
-//
-
 #include "stdafx.h"
 #include "gdipp_demo.h"
 #include <stdlib.h>
@@ -23,12 +20,12 @@ INT_PTR CALLBACK	About(HWND, UINT, WPARAM, LPARAM);
   #define test
 
 #ifdef _DEBUG
-int test_count = 0;
+int test_count = 1;
 #else
 int test_count = 2000;
 #endif
 
-const LPCTSTR test_str = TEXT("Hello≤‚ ‘Œƒ◊÷GgJjQq");
+const LPCTSTR test_str = TEXT("≤‚ ‘Œƒ◊÷Hello GgJjQq");
 DWORD start = 0;
 DWORD end = 0;
 TCHAR elapse_str[128] = {0};
@@ -205,8 +202,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			BYTE b = rand() % 255;
 			SetTextColor(hdc, RGB(r, g, b));
 
-			int x = rand() % ((ps.rcPaint.right - ps.rcPaint.left) / 1);
-			int y = rand() % ((ps.rcPaint.bottom - ps.rcPaint.top) / 1);
+			int x = rand() % (ps.rcPaint.right - ps.rcPaint.left);
+			int y = rand() % (ps.rcPaint.bottom - ps.rcPaint.top);
 
 			ExtTextOut(hdc, x, y, 0, NULL, test_str, lstrlen(test_str), NULL);
 		}

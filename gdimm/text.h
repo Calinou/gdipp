@@ -18,59 +18,72 @@ class _gdimm_text
 	// metrics
 	BYTE *_metric_buf;
 	OUTLINETEXTMETRIC *_outline_metrics;
-	LOGFONT _font_attr;
+	LOGFONTW _font_attr;
 
 	//misc
 	UINT _eto_options;
 
 	static int get_ft_bmp_width(const FT_Bitmap &bitmap);
 	static void draw_background(HDC hdc, const RECT *bg_rect, COLORREF bg_color);
-	int get_dc_bpp() const;
-	FT_Render_Mode get_render_mode(WORD dc_bpp) const;
+	
+	BITMAP get_dc_bmp() const;
+	FT_Render_Mode get_render_mode(WORD dc_bpp, const WCHAR *font_family) const;
+	FT_UInt32 get_load_mode(FT_Render_Mode render_mode, const WCHAR *font_family) const;
 	bool get_dc_metrics();
 	void get_glyph_clazz();
-	FT_BitmapGlyph get_glyph_bmp(
+	const WCHAR *get_font_family() const
+	{ return (const WCHAR*)(_metric_buf + (UINT) _outline_metrics->otmpFamilyName); }
+
+	const WCHAR *get_font_style() const
+	{ return (const WCHAR*)(_metric_buf + (UINT) _outline_metrics->otmpStyleName); }
+
+	FT_BitmapGlyph outline_to_bitmap(
 		WCHAR ch,
 		UINT ggo_format,
 		const MAT2 &matrix,
 		FT_Render_Mode render_mode,
+		float bold_strength,
 		GLYPHMETRICS &glyph_metrics) const;
 	void set_bmp_bits_mono(
 		const FT_Bitmap &src_bitmap,
 		int x_in_dest, int y_in_dest,
 		BYTE *dest_bits,
 		int dest_width, int dest_height,
-		bool is_dest_up,
-		WORD dest_bpp) const;
+		WORD dest_bpp,
+		bool is_dest_up) const;
 	void set_bmp_bits_gray(
 		const FT_Bitmap &src_bitmap,
 		int x_in_dest, int y_in_dest,
 		BYTE *dest_bits,
 		int dest_width, int dest_height,
-		bool is_dest_up,
-		WORD dest_bpp) const;
+		WORD dest_bpp,
+		bool is_dest_up) const;
 	void set_bmp_bits_lcd(
 		const FT_Bitmap &src_bitmap,
 		int x_in_dest, int y_in_dest,
 		BYTE *dest_bits,
 		int dest_width, int dest_height,
-		bool is_dest_up,
-		WORD dest_bpp) const;
+		WORD dest_bpp,
+		bool is_dest_up) const;
 	bool draw_glyphs(
 		const vector<FT_BitmapGlyph> &glyphs,
 		const vector<POINT> &glyph_pos,
+		int max_glyph_height,
 		CONST RECT *lprect,
-		int dc_bpp) const;
+		const BITMAP &dc_bmp) const;
 
-	const TCHAR *get_family_name() const;
-	const TCHAR *get_full_name() const;
+	bool text_out_ggo(LPCWSTR lpString, UINT c, CONST RECT *lprect, CONST INT *lpDx);
+	bool text_out_ft(LPCWSTR lpString, UINT c, CONST RECT *lprect, CONST INT *lpDx);
 
 public:
-	_gdimm_text();
-	~_gdimm_text();
+	_gdimm_text()
+	{ _metric_buf = NULL; }
+
+	~_gdimm_text()
+	{ if (_metric_buf != NULL) delete[] _metric_buf; }
+
 	bool init(HDC hdc, int x, int y, UINT options);
-	bool to_glyph_indices(LPCWSTR text, unsigned int count, WORD *glyph_indices);
-	bool text_out(const WCHAR *string, unsigned int count, CONST RECT *lprect, CONST INT *lpDx);
+	bool text_out(LPCWSTR lpString, UINT c, CONST RECT *lprect, CONST INT *lpDx);
 };
 
 typedef singleton<_gdimm_text> gdimm_text;
