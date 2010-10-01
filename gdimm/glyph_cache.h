@@ -10,6 +10,8 @@ class gdimm_glyph_cache
 {
 	friend class gdimm_renderer;
 
+	FT_Glyph _empty_glyph_template;
+
 	/*
 	map from character to its glyph
 	positive key stands for glyph index
@@ -28,9 +30,15 @@ class gdimm_glyph_cache
 	// least recently used list font trait
 	lru_list<uint64_t> _glyph_run_lru;
 
+	static size_t serialize(const FT_BitmapGlyph bmp_glyph, char *buffer);
+	size_t deserialize(const char *buffer, int buffer_size, FT_BitmapGlyph bmp_glyph) const;
+
 public:
-	const FT_Glyph lookup_glyph(uint64_t font_trait, FT_UInt index, bool is_glyph_index);
-	bool store_glyph(uint64_t font_trait, FT_UInt index, bool is_glyph_index, const FT_Glyph glyph);
+	gdimm_glyph_cache();
+
+	bool initialize();
+	const FT_BitmapGlyph load_bmp_glyph(uint64_t font_trait, FT_UInt index, bool is_glyph_index);
+	bool store_bmp_glyph(uint64_t font_trait, FT_UInt index, bool is_glyph_index, const FT_BitmapGlyph bmp_glyph);
 	bool lookup_glyph_run(uint64_t font_trait, uint64_t str_hash, glyph_run &a_glyph_run);
 	bool store_glyph_run(uint64_t font_trait, uint64_t str_hash, const glyph_run &a_glyph_run);
 	bool erase_font_trait(uint64_t font_trait);

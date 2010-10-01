@@ -15,7 +15,7 @@ class gdimm_ft_renderer : public gdimm_renderer
 		FT_F26Dot6 embolden,
 		FT_ULong load_flags,
 		bool is_italic) const;
-	const FT_Glyph generate_bitmap_glyph(WORD glyph_index,
+	const FT_Glyph generate_glyph(WORD glyph_index,
 		const FTC_Scaler scaler,
 		FT_Render_Mode render_mode,
 		FT_F26Dot6 embolden,

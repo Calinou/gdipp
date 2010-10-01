@@ -150,7 +150,7 @@ bool gdimm_ft_renderer::generate_outline_glyph(FT_Glyph *glyph,
 	return need_glyph_copy;
 }
 
-const FT_Glyph gdimm_ft_renderer::generate_bitmap_glyph(WORD glyph_index,
+const FT_Glyph gdimm_ft_renderer::generate_glyph(WORD glyph_index,
 	const FTC_Scaler scaler,
 	FT_Render_Mode render_mode,
 	FT_F26Dot6 embolden,
@@ -160,40 +160,40 @@ const FT_Glyph gdimm_ft_renderer::generate_bitmap_glyph(WORD glyph_index,
 	uint64_t font_trait) const
 {
 	FT_Error ft_error;
-
-	FT_Glyph glyph;
+	FT_BitmapGlyph bmp_glyph;
 
 	if (request_outline)
 	{
-		generate_outline_glyph(&glyph, glyph_index, scaler, embolden, load_flags, is_italic);
-		return glyph;
+		FT_Glyph generic_glyph;
+		generate_outline_glyph(&generic_glyph, glyph_index, scaler, embolden, load_flags, is_italic);
+		return generic_glyph;
 	}
 
-	glyph = _glyph_cache.lookup_glyph(font_trait, glyph_index, true);
-	if (glyph == NULL)
+	bmp_glyph = _glyph_cache.load_bmp_glyph(font_trait, glyph_index, true);
+	if (bmp_glyph == NULL)
 	{
 		// double-check lock
 		gdimm_lock lock(LOCK_GLYPH_CACHE);
-		glyph = _glyph_cache.lookup_glyph(font_trait, glyph_index, true);
-		if (glyph == NULL)
+		bmp_glyph = _glyph_cache.load_bmp_glyph(font_trait, glyph_index, true);
+		if (bmp_glyph == NULL)
 		{
 			// no cached glyph, or outline glyph is requested, generate outline
-			const bool is_local_glyph = generate_outline_glyph(&glyph, glyph_index, scaler, embolden, load_flags, is_italic);
+			const bool is_local_glyph = generate_outline_glyph(reinterpret_cast<FT_Glyph *>(&bmp_glyph), glyph_index, scaler, embolden, load_flags, is_italic);
 
 			// outline -> bitmap conversion
 			{
 				// the FreeType function seems not thread-safe
 				gdimm_lock lock(LOCK_FREETYPE);
-				ft_error = FT_Glyph_To_Bitmap(&glyph, render_mode, NULL, is_local_glyph);
+				ft_error = FT_Glyph_To_Bitmap(reinterpret_cast<FT_Glyph *>(&bmp_glyph), render_mode, NULL, is_local_glyph);
 				if (ft_error != 0)
 					return NULL;
 			}
 
-			_glyph_cache.store_glyph(font_trait, glyph_index, true, glyph);
+			_glyph_cache.store_bmp_glyph(font_trait, glyph_index, true, bmp_glyph);
 		}
 	}
 
-	return glyph;
+	return reinterpret_cast<FT_Glyph>(bmp_glyph);
 }
 
 bool gdimm_ft_renderer::generate_glyph_run(bool is_glyph_index, LPCWSTR lpString, UINT c, glyph_run &new_glyph_run, bool request_outline)
@@ -231,7 +231,7 @@ bool gdimm_ft_renderer::generate_glyph_run(bool is_glyph_index, LPCWSTR lpString
 
 		for (UINT i = 0; i < c; i++)
 		{
-			const FT_Glyph new_glyph = generate_bitmap_glyph(lpString[i],
+			const FT_Glyph new_glyph = generate_glyph(lpString[i],
 				&scaler,
 				_render_mode,
 				curr_embolden,
@@ -288,7 +288,7 @@ bool gdimm_ft_renderer::generate_glyph_run(bool is_glyph_index, LPCWSTR lpString
 					*glyph_iter = NULL;
 				else if (glyph_indices[i] != 0xffff)
 				{
-					*glyph_iter = generate_bitmap_glyph(glyph_indices[i],
+					*glyph_iter = generate_glyph(glyph_indices[i],
 						&scaler,
 						curr_render_mode,
 						curr_embolden,

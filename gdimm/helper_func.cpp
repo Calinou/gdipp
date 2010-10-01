@@ -273,21 +273,49 @@ bool get_render_mode(const font_setting_cache *font_setting, WORD dc_bmp_bpp, BY
 	return false;
 }
 
-const FT_Glyph make_empty_outline_glyph()
+const FT_Glyph make_empty_bitmap_glyph(const FT_Glyph empty_glyph)
 {
-	FT_Glyph empty_glyph;
+	assert(empty_glyph != NULL);
 
 	FT_Error ft_error;
+
+	FT_OutlineGlyphRec empty_outline_glyph =
+	{
+		*empty_glyph,
+		{
+			0,
+				0,
+				NULL,
+				NULL,
+				NULL,
+				0
+		}
+	};
+	FT_Glyph empty_bmp_glyph = reinterpret_cast<FT_Glyph>(&empty_outline_glyph);
+
+	ft_error = FT_Glyph_To_Bitmap(&empty_bmp_glyph, FT_RENDER_MODE_NORMAL, NULL, false);
+	if (ft_error != 0)
+		return NULL;
+
+	assert(empty_bmp_glyph->format == FT_GLYPH_FORMAT_BITMAP);
+
+	return empty_bmp_glyph;
+}
+
+const FT_Glyph make_empty_outline_glyph()
+{
+	FT_Error ft_error;
+	FT_Glyph empty_outln_glyph;
 
 	FT_GlyphSlotRec glyph_slot = {};
 	glyph_slot.library = ft_lib;
 	glyph_slot.format = FT_GLYPH_FORMAT_OUTLINE;
 
-	ft_error = FT_Get_Glyph(&glyph_slot, &empty_glyph);
+	ft_error = FT_Get_Glyph(&glyph_slot, &empty_outln_glyph);
 	if (ft_error != 0)
 		return NULL;
 
-	return empty_glyph;
+	return empty_outln_glyph;
 }
 
 bool mb_to_wc(const char *multi_byte_str, int count, wstring &wide_char_str)

@@ -76,7 +76,7 @@ bool gdimm_ggo_renderer::get_glyph_metrics(wchar_t ch, GLYPHMETRICS &glyph_metri
 	return (outline_buf_len != GDI_ERROR);
 }
 
-const FT_Glyph gdimm_ggo_renderer::outline_to_bitmap(wchar_t ch, GLYPHMETRICS &glyph_metrics) const
+const FT_BitmapGlyph gdimm_ggo_renderer::outline_to_bitmap(wchar_t ch, GLYPHMETRICS &glyph_metrics) const
 {
 	bool b_ret;
 	FT_Error ft_error;
@@ -136,6 +136,7 @@ const FT_Glyph gdimm_ggo_renderer::outline_to_bitmap(wchar_t ch, GLYPHMETRICS &g
 
 		// convert outline to bitmap
 		FT_Glyph generic_glyph = reinterpret_cast<FT_Glyph>(&outline_glyph);
+		FT_BitmapGlyph bmp_glyph = reinterpret_cast<FT_BitmapGlyph>(generic_glyph);
 
 		{
 			// the FreeType function seems not thread-safe
@@ -145,9 +146,9 @@ const FT_Glyph gdimm_ggo_renderer::outline_to_bitmap(wchar_t ch, GLYPHMETRICS &g
 				return NULL;
 		}
 
-		_glyph_cache.store_glyph(_font_trait, ch, !!(_ggo_format & GGO_GLYPH_INDEX), generic_glyph);
+		_glyph_cache.store_bmp_glyph(_font_trait, ch, !!(_ggo_format & GGO_GLYPH_INDEX), bmp_glyph);
 
-		return generic_glyph;
+		return bmp_glyph;
 	}
 }
 
@@ -179,18 +180,18 @@ bool gdimm_ggo_renderer::render(bool is_glyph_index, bool is_pdy, LPCWSTR lpStri
 	for (UINT i = 0; i < c; i++)
 	{
 		GLYPHMETRICS glyph_metrics = {};
-		FT_Glyph new_glyph;
+		FT_BitmapGlyph new_glyph;
 
 		// we do not care about non-printable characters
 		// solution for Windows Vista/7 Date
 		if (is_glyph_index || !iswcntrl(lpString[i]))
 		{
-			new_glyph = _glyph_cache.lookup_glyph(_font_trait, lpString[i], is_glyph_index);
+			new_glyph = _glyph_cache.load_bmp_glyph(_font_trait, lpString[i], is_glyph_index);
 			if (new_glyph == NULL)
 			{
 				// double-check lock
 				gdimm_lock lock(LOCK_GLYPH_CACHE);
-				new_glyph = _glyph_cache.lookup_glyph(_font_trait, lpString[i], is_glyph_index);
+				new_glyph = _glyph_cache.load_bmp_glyph(_font_trait, lpString[i], is_glyph_index);
 				if (new_glyph == NULL)
 					new_glyph = outline_to_bitmap(lpString[i], glyph_metrics);
 			}
@@ -225,7 +226,7 @@ bool gdimm_ggo_renderer::render(bool is_glyph_index, bool is_pdy, LPCWSTR lpStri
 		black_box.right = black_box.left + glyph_width;
 		black_box.bottom = ctrl_box.bottom;
 
-		new_glyph_run.glyphs.push_back(new_glyph);
+		new_glyph_run.glyphs.push_back(reinterpret_cast<FT_Glyph>(new_glyph));
 		new_glyph_run.ctrl_boxes.push_back(ctrl_box);
 		new_glyph_run.black_boxes.push_back(black_box);
 	}

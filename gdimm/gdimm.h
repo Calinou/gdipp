@@ -17,3 +17,4 @@ extern gdimm_setting_cache setting_cache_instance;
 
 extern sqlite3 *glyph_cache_db;
 extern sqlite3 *glyph_run_cache_db;
+extern Db *db;

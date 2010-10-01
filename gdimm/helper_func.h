@@ -56,6 +56,7 @@ bool operator<(const LOGFONTW &lf1, const LOGFONTW &lf2);
 // otherwise, return false
 bool get_render_mode(const font_setting_cache *font_setting, WORD dc_bmp_bpp, BYTE font_quality, FT_Render_Mode &render_mode);
 
+const FT_Glyph make_empty_bitmap_glyph(const FT_Glyph empty_glyph);
 const FT_Glyph make_empty_outline_glyph();
 
 bool mb_to_wc(const char *multi_byte_str, int count, wstring &wide_char_str);

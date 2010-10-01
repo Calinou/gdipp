@@ -37,6 +37,7 @@
 #include <easyhook.h>
 
 #include <sqlite3.h>
+#include <db_cxx.h>
 
 #include <d2d1.h>
 #include <dwrite.h>

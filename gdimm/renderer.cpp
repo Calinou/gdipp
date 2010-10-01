@@ -6,7 +6,8 @@ gdimm_glyph_cache gdimm_renderer::_glyph_cache;
 
 gdimm_renderer::gdimm_renderer()
 {
-	_glyph_cache._glyph_run_lru.resize(ft_cache_max_faces * ft_cache_max_sizes);
+	//_glyph_cache._glyph_run_lru.resize(ft_cache_max_faces * ft_cache_max_sizes);
+	_glyph_cache.initialize();
 }
 
 gdimm_renderer::~gdimm_renderer()
@@ -39,13 +40,13 @@ bool gdimm_renderer::fetch_glyph_run(bool is_glyph_index, bool is_pdy, LPCWSTR l
 {
 	bool b_ret;
 
-	uint64_t erased_trait;
-	const bool overflow = _glyph_cache._glyph_run_lru.access(_font_trait, erased_trait);
-	if (overflow)
-	{
-		// erasing font trait may fail, in case that no glyph was successfully rendered
-		b_ret = _glyph_cache.erase_font_trait(erased_trait);
-	}
+// 	uint64_t erased_trait;
+// 	const bool overflow = _glyph_cache._glyph_run_lru.access(_font_trait, erased_trait);
+// 	if (overflow)
+// 	{
+// 		// erasing font trait may fail, in case that no glyph was successfully rendered
+// 		b_ret = _glyph_cache.erase_font_trait(erased_trait);
+// 	}
 
 #ifdef _M_X64
 	const uint64_t str_hash = MurmurHash64A(lpString, c * sizeof(WCHAR), is_glyph_index);

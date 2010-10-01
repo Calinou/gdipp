@@ -193,7 +193,7 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)freetype;$(SolutionDir)gdipp_common;$(SolutionDir)freetype\include;$(SolutionDir)EasyHook;$(SolutionDir)sqlite3\sqlite-amalgamation;$(SolutionDir)DirectX\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)freetype;$(SolutionDir)gdipp_common;$(SolutionDir)freetype\include;$(SolutionDir)EasyHook;$(SolutionDir)sqlite3\sqlite-amalgamation;$(SolutionDir)DirectX\Include;$(SolutionDir)berkeley_db\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <EnableEnhancedInstructionSet>StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
       <EnablePREfast>false</EnablePREfast>
@@ -202,8 +202,8 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>EasyHook32.lib;d2d1.lib;dwrite.lib;msimg32.lib;psapi.lib;usp10.lib;windowscodecs.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>$(SolutionDir)EasyHook;$(SolutionDir)DirectX\Lib\x86;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>EasyHook32.lib;d2d1.lib;dwrite.lib;msimg32.lib;psapi.lib;usp10.lib;windowscodecs.lib;libdb51.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(SolutionDir)EasyHook;$(SolutionDir)DirectX\Lib\x86;$(SolutionDir)berkeley_db\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <ModuleDefinitionFile>
       </ModuleDefinitionFile>
       <DelayLoadDLLs>d2d1.dll;DWrite.dll</DelayLoadDLLs>
@@ -236,7 +236,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)freetype;$(SolutionDir)gdipp_common;$(SolutionDir)freetype\include;$(SolutionDir)EasyHook;$(SolutionDir)sqlite3\sqlite-amalgamation;$(SolutionDir)DirectX\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)freetype;$(SolutionDir)gdipp_common;$(SolutionDir)freetype\include;$(SolutionDir)EasyHook;$(SolutionDir)sqlite3\sqlite-amalgamation;$(SolutionDir)DirectX\Include;$(solutionDir)berkeley_db\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <EnableEnhancedInstructionSet>StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
       <Optimization>Full</Optimization>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
@@ -246,8 +246,8 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalDependencies>EasyHook32.lib;d2d1.lib;dwrite.lib;msimg32.lib;psapi.lib;usp10.lib;windowscodecs.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>$(SolutionDir)EasyHook;$(SolutionDir)DirectX\Lib\x86;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>EasyHook32.lib;d2d1.lib;dwrite.lib;msimg32.lib;psapi.lib;usp10.lib;windowscodecs.lib;libdb51.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(SolutionDir)EasyHook;$(SolutionDir)DirectX\Lib\x86;$(SolutionDir)berkeley_db\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <ModuleDefinitionFile>
       </ModuleDefinitionFile>
       <DelayLoadDLLs>d2d1.dll;DWrite.dll</DelayLoadDLLs>

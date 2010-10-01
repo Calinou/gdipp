@@ -66,7 +66,6 @@ IFACEMETHODIMP_(void) DrawGlyphRun_hook(
 	DWRITE_MEASURING_MODE measuringMode 
 	)
 {
-
 }
 
 IFACEMETHODIMP CreateDxgiSurfaceRenderTarget_hook(
