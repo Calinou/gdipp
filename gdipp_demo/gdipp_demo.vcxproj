@@ -156,8 +156,6 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>
-      </AdditionalLibraryDirectories>
       <DelayLoadDLLs>gdipp_common_32.dll</DelayLoadDLLs>
     </Link>
     <ResourceCompile>
@@ -178,8 +176,6 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>
-      </AdditionalLibraryDirectories>
       <DelayLoadDLLs>gdipp_common_64.dll</DelayLoadDLLs>
     </Link>
     <ResourceCompile>
@@ -204,8 +200,6 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <AdditionalDependencies>%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>
-      </AdditionalLibraryDirectories>
       <DelayLoadDLLs>gdipp_common_32.dll</DelayLoadDLLs>
     </Link>
     <ResourceCompile>
@@ -229,8 +223,6 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <AdditionalDependencies>%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>
-      </AdditionalLibraryDirectories>
       <DelayLoadDLLs>gdipp_common_64.dll</DelayLoadDLLs>
     </Link>
     <ResourceCompile>

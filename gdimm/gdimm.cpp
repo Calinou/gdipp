@@ -65,7 +65,7 @@ bool initialize_cache_db()
 
 		wcscpy_s(curr_db_path, base_db_path);
 		PathAppendW(curr_db_path, L"glyph.sqlite");
-		i_ret = sqlite3_open16(L":memory:", &glyph_cache_db);
+		i_ret = sqlite3_open16(curr_db_path, &glyph_cache_db);
 		if (i_ret == SQLITE_OK)
 		{
 			b_ret = set_db_pragma(glyph_cache_db);
@@ -98,9 +98,6 @@ bool initialize_cache_db()
 			sqlite3_shutdown();
 	}
 
-	/*db = new Db(NULL, 0);
-	db->open(NULL, "C:\\cache.db", NULL, DB_BTREE, DB_CREATE | DB_THREAD, 0);*/
-
 	return false;
 }
 
@@ -123,11 +120,6 @@ bool destroy_cache_db()
 
 	i_ret = sqlite3_shutdown();
 	return b_ret & (i_ret == SQLITE_OK);
-
-	/*db->close(0);
-	delete db;
-
-	return true;*/
 }
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved)

@@ -197,15 +197,6 @@ bool gdimm_glyph_cache::store_bmp_glyph(uint64_t font_trait, FT_UInt index, bool
 	i_ret = sqlite3_reset(insert_glyph_stmt);
 	assert(i_ret == SQLITE_OK);
 
-	/*const size_t glyph_data_size = serialize(bmp_glyph, NULL);
-	char *glyph_data_buffer = new char[glyph_data_size];
-	serialize(bmp_glyph, glyph_data_buffer);
-
-	FT_Int internal_index = index * (is_glyph_index ? 1 : -1);
-	Dbt key(&font_trait, sizeof(font_trait)), value(glyph_data_buffer, glyph_data_size);
-	db->put(NULL, &key, &value, DB_NOOVERWRITE);
-	delete[] glyph_data_buffer;*/
-
 	return true;
 }
 

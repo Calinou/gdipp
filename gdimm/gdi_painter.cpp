@@ -606,14 +606,14 @@ void gdimm_gdi_painter::end()
 {
 	DeleteDC(_hdc_canvas);
 
-	for (list<FT_Glyph>::iterator glyph_iter = _text_glyphs.begin(); glyph_iter != _text_glyphs.end(); glyph_iter++)
+	/*for (list<FT_Glyph>::iterator glyph_iter = _text_glyphs.begin(); glyph_iter != _text_glyphs.end(); glyph_iter++)
 	{
 		FT_BitmapGlyph bmp_glyph = reinterpret_cast<FT_BitmapGlyph>(*glyph_iter);
 		if (bmp_glyph->bitmap.palette_mode == 27)
 			free(bmp_glyph->bitmap.buffer);
 
 		FT_Done_Glyph(*glyph_iter);
-	}
+	}*/
 }
 
 bool gdimm_gdi_painter::paint(int x, int y, UINT options, CONST RECT *lprect, const void *text, UINT c, CONST INT *lpDx)

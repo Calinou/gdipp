@@ -163,10 +163,6 @@
       <AdditionalLibraryDirectories>$(SolutionDir)EasyHook</AdditionalLibraryDirectories>
       <DelayLoadDLLs>gdipp_common_64.dll</DelayLoadDLLs>
     </Link>
-    <ResourceCompile>
-      <AdditionalIncludeDirectories>
-      </AdditionalIncludeDirectories>
-    </ResourceCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
