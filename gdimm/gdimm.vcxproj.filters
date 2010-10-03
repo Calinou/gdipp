@@ -96,9 +96,6 @@
     <ClInclude Include="helper_func.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="lru.h">
-      <Filter>Header Files\cache</Filter>
-    </ClInclude>
     <ClInclude Include="painter.h">
       <Filter>Header Files\painter</Filter>
     </ClInclude>

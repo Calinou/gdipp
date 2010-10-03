@@ -20,6 +20,7 @@ class gdimm_gdi_painter : public gdimm_painter
 
 	HDC _hdc_canvas;
 	RGBQUAD _text_rgb_gamma;
+	list<FT_Glyph> _text_glyphs;
 
 	// adjust the glyph boxes from distance array
 	static void adjust_glyph_bbox(bool is_pdy, UINT count, CONST INT *lpDx, glyph_run *a_glyph_run);

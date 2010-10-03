@@ -37,7 +37,6 @@
     <ClInclude Include="helper_func.h" />
     <ClInclude Include="hook.h" />
     <ClInclude Include="lock.h" />
-    <ClInclude Include="lru.h" />
     <ClInclude Include="MurmurHash2_64.h" />
     <ClInclude Include="os2_metrics.h" />
     <ClInclude Include="api_override.h" />

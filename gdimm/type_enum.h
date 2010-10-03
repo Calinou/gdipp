@@ -36,7 +36,7 @@ enum LOCK_TYPE
 	LOCK_DEBUG,
 
 	// count of lock types
-	// NEVER use this type
+	// NEVER use this entry
 	_LOCK_TYPE_COUNT_
 };
 
@@ -53,4 +53,16 @@ enum RENDERER_TYPE
 	RENDERER_GETGLYPHOUTLINE = 20,
 	RENDERER_DIRECTWRITE = 30,
 	RENDERER_WIC = 31
+};
+
+enum SQL_STMT_TYPE
+{
+	SELECT_GLYPH_STMT,
+	INSERT_GLYPH_STMT,
+	SELECT_GLYPH_RUN_STMT,
+	INSERT_GLYPH_RUN_STMT,
+
+	// count of SQL statements
+	// NEVER use this entry
+	_SQL_STMT_COUNT_
 };

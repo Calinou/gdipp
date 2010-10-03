@@ -605,6 +605,15 @@ bool gdimm_gdi_painter::begin(const dc_context *context, FT_Render_Mode render_m
 void gdimm_gdi_painter::end()
 {
 	DeleteDC(_hdc_canvas);
+
+	for (list<FT_Glyph>::iterator glyph_iter = _text_glyphs.begin(); glyph_iter != _text_glyphs.end(); glyph_iter++)
+	{
+		FT_BitmapGlyph bmp_glyph = reinterpret_cast<FT_BitmapGlyph>(*glyph_iter);
+		if (bmp_glyph->bitmap.palette_mode == 27)
+			free(bmp_glyph->bitmap.buffer);
+
+		FT_Done_Glyph(*glyph_iter);
+	}
 }
 
 bool gdimm_gdi_painter::paint(int x, int y, UINT options, CONST RECT *lprect, const void *text, UINT c, CONST INT *lpDx)
@@ -638,6 +647,8 @@ bool gdimm_gdi_painter::paint(int x, int y, UINT options, CONST RECT *lprect, co
 	_text_rgb_gamma.rgbBlue = gamma_ramps[2][GetBValue(_text_color)];
 
 	const glyph_run *a_glyph_run = reinterpret_cast<const glyph_run *>(text);
+	_text_glyphs = a_glyph_run->glyphs;
+
 	if (lpDx == NULL)
 		paint_success = paint_glyph_run(options, lprect, a_glyph_run);
 	else

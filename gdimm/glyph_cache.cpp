@@ -3,65 +3,63 @@
 #include "gdimm.h"
 
 gdimm_glyph_cache::gdimm_glyph_cache()
-	: _empty_glyph_template(NULL)
+	: _empty_glyph_template(NULL),
+	_sql_stmt_tls_index(0)
 {
 }
 
-size_t gdimm_glyph_cache::serialize(const FT_BitmapGlyph bmp_glyph, char *buffer)
+gdimm_glyph_cache::~gdimm_glyph_cache()
 {
-	const int bitmap_buffer_size = bmp_glyph->bitmap.pitch * bmp_glyph->bitmap.rows;
-
-	if (buffer == NULL)
-		return sizeof(bmp_glyph->root.advance) + sizeof(bmp_glyph->left) + sizeof(bmp_glyph->top) + sizeof(bmp_glyph->bitmap) + bitmap_buffer_size;
-	else
-	{
-		const char *orig_buffer_ptr = buffer;
-
-		memcpy(buffer, &bmp_glyph->root.advance, sizeof(bmp_glyph->root.advance));
-		buffer += sizeof(bmp_glyph->root.advance);
-
-		memcpy(buffer, &bmp_glyph->left, sizeof(bmp_glyph->left));
-		buffer += sizeof(bmp_glyph->left);
-
-		memcpy(buffer, &bmp_glyph->top, sizeof(bmp_glyph->top));
-		buffer += sizeof(bmp_glyph->top);
-
-		memcpy(buffer, &bmp_glyph->bitmap, sizeof(bmp_glyph->bitmap));
-		buffer += sizeof(bmp_glyph->bitmap);
-
-		memcpy(buffer, bmp_glyph->bitmap.buffer, bitmap_buffer_size);
-		buffer += bitmap_buffer_size;
-		
-		return buffer - orig_buffer_ptr;
-	}
-}
-
-size_t gdimm_glyph_cache::deserialize(const char *buffer, int buffer_size, FT_BitmapGlyph bmp_glyph) const
-{
-	const char *orig_buffer_ptr = buffer;
+	int i_ret;
 	
-	if (buffer != NULL)
+	if (_sql_stmt_tls_index != 0)
 	{
-		bmp_glyph->root.advance = *reinterpret_cast<const FT_Vector *>(buffer);
-		buffer += sizeof(bmp_glyph->root.advance);
+		sqlite3_stmt **sql_stmts = reinterpret_cast<sqlite3_stmt **>(TlsGetValue(_sql_stmt_tls_index));
+		if (sql_stmts != NULL)
+		{
+			for (int i = 0; i < _SQL_STMT_COUNT_; i++)
+			{
+				if (sql_stmts[i] != NULL)
+				{
+					i_ret = sqlite3_finalize(sql_stmts[i]);
+					assert(i_ret == SQLITE_OK);
+				}
+			}
+		}
 
-		bmp_glyph->left = *reinterpret_cast<const FT_Int *>(buffer);
-		buffer += sizeof(bmp_glyph->left);
+		free(sql_stmts);
+		free_tls_index(_sql_stmt_tls_index);
+	}
+}
 
-		bmp_glyph->top = *reinterpret_cast<const FT_Int *>(buffer);
-		buffer += sizeof(bmp_glyph->top);
+sqlite3_stmt *gdimm_glyph_cache::get_sql_stmt(SQL_STMT_TYPE stmt_type) const
+{
+	sqlite3_stmt **sql_stmts = reinterpret_cast<sqlite3_stmt **>(TlsGetValue(_sql_stmt_tls_index));
 
-		bmp_glyph->bitmap = *reinterpret_cast<const FT_Bitmap *>(buffer);
-		buffer += sizeof(bmp_glyph->bitmap);
+	if (sql_stmts == NULL)
+		return NULL;
+	else
+		return sql_stmts[stmt_type];
+}
 
-		const int bitmap_buffer_size = bmp_glyph->bitmap.pitch * bmp_glyph->bitmap.rows;
-		assert(buffer_size - bitmap_buffer_size == buffer - orig_buffer_ptr);
-		bmp_glyph->bitmap.buffer = new unsigned char[bitmap_buffer_size];
-		memcpy(bmp_glyph->bitmap.buffer, buffer, bitmap_buffer_size);
-		buffer += bitmap_buffer_size;
+bool gdimm_glyph_cache::set_sql_stmt(SQL_STMT_TYPE stmt_type, sqlite3_stmt *stmt) const
+{
+	BOOL b_ret;
+	sqlite3_stmt **sql_stmts = reinterpret_cast<sqlite3_stmt **>(TlsGetValue(_sql_stmt_tls_index));
+
+	if (sql_stmts == NULL)
+	{
+		sql_stmts = reinterpret_cast<sqlite3_stmt **>(calloc(_SQL_STMT_COUNT_, sizeof(sqlite3_stmt *)));
+		b_ret = TlsSetValue(_sql_stmt_tls_index, sql_stmts);
+		if (!b_ret)
+		{
+			delete[] sql_stmts;
+			return false;
+		}
 	}
 
-	return buffer - orig_buffer_ptr;
+	sql_stmts[stmt_type] = stmt;
+	return true;
 }
 
 bool gdimm_glyph_cache::initialize()
@@ -75,95 +73,129 @@ bool gdimm_glyph_cache::initialize()
 		assert(_empty_glyph_template != NULL);
 	}
 
+	_sql_stmt_tls_index = create_tls_index();
+
 	return true;
 }
 
-const FT_BitmapGlyph gdimm_glyph_cache::load_bmp_glyph(uint64_t font_trait, FT_UInt index, bool is_glyph_index)
+const FT_BitmapGlyph gdimm_glyph_cache::load_bmp_glyph(uint64_t font_trait, FT_UInt index, bool is_glyph_index) const
 {
+	bool b_ret;
 	int i_ret;
-	char *curr_sql;
-	sqlite3_stmt *curr_stmt;
 	FT_BitmapGlyph bmp_glyph = NULL;
 
 	if (glyph_cache_db != NULL)
 	{
-		const FT_Int internal_index = index * (is_glyph_index ? 1 : -1);
-		curr_sql = sqlite3_mprintf("SELECT glyph_data FROM 'gdipp_glyph' WHERE font_trait = %llu AND char_index = %d AND glyph_type = %d", font_trait, internal_index, 1);
-
-		i_ret = sqlite3_prepare_v2(glyph_cache_db, curr_sql, -1, &curr_stmt, NULL);
-		if (i_ret != SQLITE_OK)
-			return bmp_glyph;
-
-		i_ret = sqlite3_step(curr_stmt);
-		
-		if (i_ret == SQLITE_ROW)
+		sqlite3_stmt *select_glyph_stmt = get_sql_stmt(SELECT_GLYPH_STMT);
+		if (select_glyph_stmt == NULL)
 		{
-			bmp_glyph = new FT_BitmapGlyphRec;
-			bmp_glyph->root = *_empty_glyph_template;
-			const char *glyph_data_buffer = reinterpret_cast<const char *>(sqlite3_column_blob(curr_stmt, 0));
-			deserialize(glyph_data_buffer, sqlite3_column_bytes(curr_stmt, 0), bmp_glyph);
+			b_ret = false;
+
+			i_ret = sqlite3_prepare16_v2(glyph_cache_db, L"SELECT advance_x, advance_y, left, top, rows, width, pitch, buffer, num_grays, pixel_mode FROM bitmap_glyph WHERE font_trait = ? AND char_index = ?", -1, &select_glyph_stmt, NULL);
+			if (i_ret == SQLITE_OK)
+				b_ret = set_sql_stmt(SELECT_GLYPH_STMT, select_glyph_stmt);
+
+			if (!b_ret)
+				return NULL;
 		}
 
-		i_ret = sqlite3_finalize(curr_stmt);
+		i_ret = sqlite3_bind_int64(select_glyph_stmt, 1, font_trait);
 		assert(i_ret == SQLITE_OK);
 
-		sqlite3_free(curr_sql);
+		const FT_Int internal_index = index * (is_glyph_index ? 1 : -1);
+		i_ret = sqlite3_bind_int(select_glyph_stmt, 2, internal_index);
+		assert(i_ret == SQLITE_OK);
+
+		i_ret = sqlite3_step(select_glyph_stmt);
+		if (i_ret == SQLITE_ROW)
+		{
+			bmp_glyph = reinterpret_cast<FT_BitmapGlyph>(calloc(1, sizeof(FT_BitmapGlyphRec)));
+			bmp_glyph->root = *_empty_glyph_template;
+			bmp_glyph->root.advance.x = sqlite3_column_int(select_glyph_stmt, 0);
+			bmp_glyph->root.advance.y = sqlite3_column_int(select_glyph_stmt, 1);
+			bmp_glyph->left = sqlite3_column_int(select_glyph_stmt, 2);
+			bmp_glyph->top = sqlite3_column_int(select_glyph_stmt, 3);
+			bmp_glyph->bitmap.rows = sqlite3_column_int(select_glyph_stmt, 4);
+			bmp_glyph->bitmap.width = sqlite3_column_int(select_glyph_stmt, 5);
+			bmp_glyph->bitmap.pitch = sqlite3_column_int(select_glyph_stmt, 6);
+			const int glyph_buffer_size = sqlite3_column_bytes(select_glyph_stmt, 7);
+			bmp_glyph->bitmap.buffer = reinterpret_cast<unsigned char *>(malloc(glyph_buffer_size));
+			memcpy(bmp_glyph->bitmap.buffer, sqlite3_column_blob(select_glyph_stmt, 7), glyph_buffer_size);
+			bmp_glyph->bitmap.num_grays = sqlite3_column_int(select_glyph_stmt, 8);
+			bmp_glyph->bitmap.pixel_mode = sqlite3_column_int(select_glyph_stmt, 9);
+			bmp_glyph->bitmap.palette_mode = 27;
+		}
+
+		i_ret = sqlite3_reset(select_glyph_stmt);
+		assert(i_ret == SQLITE_OK);
 	}
 
 	return bmp_glyph;
 }
 
-bool gdimm_glyph_cache::store_bmp_glyph(uint64_t font_trait, FT_UInt index, bool is_glyph_index, const FT_BitmapGlyph bmp_glyph)
+bool gdimm_glyph_cache::store_bmp_glyph(uint64_t font_trait, FT_UInt index, bool is_glyph_index, const FT_BitmapGlyph bmp_glyph) const
 {
+	bool b_ret;
 	int i_ret;
-	char *curr_sql;
-	sqlite3_stmt *curr_stmt;
 
 	if (glyph_cache_db == NULL)
 		return false;
 
-	/*const FT_Int internal_index = index * (is_glyph_index ? 1 : -1);
-	const size_t glyph_id_buffer_len = sizeof(font_trait) + sizeof(internal_index);
-	char *glyph_id_buffer = new char[glyph_id_buffer_len];
-	*reinterpret_cast<uint64_t *>(glyph_id_buffer) = font_trait;
-	*reinterpret_cast<FT_Int *>(glyph_id_buffer + sizeof(font_trait)) = internal_index;
+	sqlite3_stmt *insert_glyph_stmt = get_sql_stmt(INSERT_GLYPH_STMT);
+	if (insert_glyph_stmt == NULL)
+	{
+		b_ret = false;
 
-#ifdef _M_X64
-	const uint64_t glyph_id = MurmurHash64A(glyph_id_buffer, glyph_id_buffer_len, 1);
-#else
-	const uint64_t glyph_id = MurmurHash64B(glyph_id_buffer, glyph_id_buffer_len, 1);
-#endif // _M_X64
+		i_ret = sqlite3_prepare16_v2(glyph_cache_db, L"INSERT INTO bitmap_glyph VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", -1, &insert_glyph_stmt, NULL);
+		if (i_ret == SQLITE_OK)
+			b_ret = set_sql_stmt(INSERT_GLYPH_STMT, insert_glyph_stmt);
 
-	delete [] glyph_id_buffer;*/
+		if (!b_ret)
+			return NULL;
+	}
 
-	curr_sql = sqlite3_mprintf("CREATE TABLE IF NOT EXISTS '%llu' ('char_index' INTEGER NOT NULL, 'glyph_type' INTEGER NOT NULL, 'glyph_data' BLOB NOT NULL, PRIMARY KEY ('char_index', 'glyph_type'))", font_trait);
-	assert(curr_sql != NULL);
-	i_ret = sqlite3_exec(glyph_cache_db, curr_sql, NULL, NULL, NULL);
+	i_ret = sqlite3_bind_int64(insert_glyph_stmt, 1, font_trait);
 	assert(i_ret == SQLITE_OK);
-	sqlite3_free(curr_sql);
-
-	const size_t glyph_data_size = serialize(bmp_glyph, NULL);
-	char *glyph_data_buffer = new char[glyph_data_size];
-	serialize(bmp_glyph, glyph_data_buffer);
 
 	const FT_Int internal_index = index * (is_glyph_index ? 1 : -1);
-	curr_sql = sqlite3_mprintf("INSERT INTO '%llu' VALUES (%d, %d, ?)", font_trait, internal_index, 1);
-	assert(curr_sql != NULL);
-	i_ret = sqlite3_prepare_v2(glyph_cache_db, curr_sql, -1, &curr_stmt, NULL);
-	assert(i_ret == SQLITE_OK);
-	
-	i_ret = sqlite3_bind_blob(curr_stmt, 1, glyph_data_buffer, glyph_data_size, NULL);
+	i_ret = sqlite3_bind_int(insert_glyph_stmt, 2, internal_index);
 	assert(i_ret == SQLITE_OK);
 
-	i_ret = sqlite3_step(curr_stmt);
-	//assert(i_ret == SQLITE_DONE);
+	i_ret = sqlite3_bind_int(insert_glyph_stmt, 3, bmp_glyph->root.advance.x);
+	assert(i_ret == SQLITE_OK);
 
-	i_ret = sqlite3_finalize(curr_stmt);
-	//assert(i_ret == SQLITE_OK);
+	i_ret = sqlite3_bind_int(insert_glyph_stmt, 4, bmp_glyph->root.advance.y);
+	assert(i_ret == SQLITE_OK);
 
-	sqlite3_free(curr_sql);
+	i_ret = sqlite3_bind_int(insert_glyph_stmt, 5, bmp_glyph->left);
+	assert(i_ret == SQLITE_OK);
 
-	delete[] glyph_data_buffer;
+	i_ret = sqlite3_bind_int(insert_glyph_stmt, 6, bmp_glyph->top);
+	assert(i_ret == SQLITE_OK);
+
+	i_ret = sqlite3_bind_int(insert_glyph_stmt, 7, bmp_glyph->bitmap.rows);
+	assert(i_ret == SQLITE_OK);
+
+	i_ret = sqlite3_bind_int(insert_glyph_stmt, 8, bmp_glyph->bitmap.width);
+	assert(i_ret == SQLITE_OK);
+
+	i_ret = sqlite3_bind_int(insert_glyph_stmt, 9, bmp_glyph->bitmap.pitch);
+	assert(i_ret == SQLITE_OK);
+
+	i_ret = sqlite3_bind_blob(insert_glyph_stmt, 10, bmp_glyph->bitmap.buffer, bmp_glyph->bitmap.pitch * bmp_glyph->bitmap.rows, SQLITE_TRANSIENT);
+	assert(i_ret == SQLITE_OK);
+
+	i_ret = sqlite3_bind_int(insert_glyph_stmt, 11, bmp_glyph->bitmap.num_grays);
+	assert(i_ret == SQLITE_OK);
+
+	i_ret = sqlite3_bind_int(insert_glyph_stmt, 12, bmp_glyph->bitmap.pixel_mode);
+	assert(i_ret == SQLITE_OK);
+
+	i_ret = sqlite3_step(insert_glyph_stmt);
+	assert(i_ret == SQLITE_DONE);
+
+	i_ret = sqlite3_reset(insert_glyph_stmt);
+	assert(i_ret == SQLITE_OK);
 
 	/*const size_t glyph_data_size = serialize(bmp_glyph, NULL);
 	char *glyph_data_buffer = new char[glyph_data_size];
@@ -177,9 +209,9 @@ bool gdimm_glyph_cache::store_bmp_glyph(uint64_t font_trait, FT_UInt index, bool
 	return true;
 }
 
-bool gdimm_glyph_cache::lookup_glyph_run(uint64_t font_trait, uint64_t str_hash, glyph_run &a_glyph_run)
+bool gdimm_glyph_cache::lookup_glyph_run(uint64_t font_trait, uint64_t str_hash, glyph_run &a_glyph_run) const
 {
-	map<uint64_t, hash_to_run_map>::const_iterator trait_iter = _glyph_run_store.find(font_trait);
+	/*map<uint64_t, hash_to_run_map>::const_iterator trait_iter = _glyph_run_store.find(font_trait);
 	if (trait_iter == _glyph_run_store.end())
 		return false;
 
@@ -187,36 +219,17 @@ bool gdimm_glyph_cache::lookup_glyph_run(uint64_t font_trait, uint64_t str_hash,
 	if (hash_iter == trait_iter->second.end())
 		return false;
 
-	a_glyph_run = hash_iter->second;
+	a_glyph_run = hash_iter->second;*/
 
 	return true;
 }
 
-bool gdimm_glyph_cache::store_glyph_run(uint64_t font_trait, uint64_t str_hash, const glyph_run &a_glyph_run)
+bool gdimm_glyph_cache::store_glyph_run(uint64_t font_trait, uint64_t str_hash, const glyph_run &a_glyph_run) const
 {
-	const pair<map<uint64_t, hash_to_run_map>::iterator, bool> trait_insert_ret = _glyph_run_store.insert(pair<uint64_t, hash_to_run_map>(font_trait, hash_to_run_map()));
+	/*const pair<map<uint64_t, hash_to_run_map>::iterator, bool> trait_insert_ret = _glyph_run_store.insert(pair<uint64_t, hash_to_run_map>(font_trait, hash_to_run_map()));
 	const pair<hash_to_run_map::const_iterator, bool> hash_insert_ret = trait_insert_ret.first->second.insert(pair<uint64_t, glyph_run>(str_hash, a_glyph_run));
 
-	return hash_insert_ret.second;
-}
-
-bool gdimm_glyph_cache::erase_font_trait(uint64_t font_trait)
-{
-	// erase the glyph run from its store
-	// then free and erase the contained glyphs
-	
-	const size_t del_count = _glyph_run_store.erase(font_trait);
-	if (del_count == 0)
-		return false;
-
-	map<uint64_t, index_to_glyph_map>::iterator bmp_trait_iter = _glyph_store.find(font_trait);
-	if (bmp_trait_iter != _glyph_store.end())
-	{
-		for (index_to_glyph_map::const_iterator index_iter = bmp_trait_iter->second.begin(); index_iter != bmp_trait_iter->second.end(); index_iter++)
-			FT_Done_Glyph(index_iter->second);
-
-		_glyph_store.erase(font_trait);
-	}
+	return hash_insert_ret.second;*/
 
 	return true;
 }

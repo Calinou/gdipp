@@ -3,6 +3,7 @@
 #include "freetype.h"
 #include "helper_func.h"
 #include "gdimm.h"
+#include "lock.h"
 
 FT_F26Dot6 gdimm_ft_renderer::get_embolden(const font_setting_cache *setting_cache, char font_weight_class, char text_weight_class)
 {
@@ -169,28 +170,22 @@ const FT_Glyph gdimm_ft_renderer::generate_glyph(WORD glyph_index,
 		return generic_glyph;
 	}
 
-	bmp_glyph = _glyph_cache.load_bmp_glyph(font_trait, glyph_index, true);
+	bmp_glyph = glyph_cache_instance.load_bmp_glyph(font_trait, glyph_index, true);
 	if (bmp_glyph == NULL)
 	{
-		// double-check lock
-		gdimm_lock lock(LOCK_GLYPH_CACHE);
-		bmp_glyph = _glyph_cache.load_bmp_glyph(font_trait, glyph_index, true);
-		if (bmp_glyph == NULL)
+		// no cached glyph, or outline glyph is requested, generate outline
+		const bool is_local_glyph = generate_outline_glyph(reinterpret_cast<FT_Glyph *>(&bmp_glyph), glyph_index, scaler, embolden, load_flags, is_italic);
+
+		// outline -> bitmap conversion
 		{
-			// no cached glyph, or outline glyph is requested, generate outline
-			const bool is_local_glyph = generate_outline_glyph(reinterpret_cast<FT_Glyph *>(&bmp_glyph), glyph_index, scaler, embolden, load_flags, is_italic);
-
-			// outline -> bitmap conversion
-			{
-				// the FreeType function seems not thread-safe
-				gdimm_lock lock(LOCK_FREETYPE);
-				ft_error = FT_Glyph_To_Bitmap(reinterpret_cast<FT_Glyph *>(&bmp_glyph), render_mode, NULL, is_local_glyph);
-				if (ft_error != 0)
-					return NULL;
-			}
-
-			_glyph_cache.store_bmp_glyph(font_trait, glyph_index, true, bmp_glyph);
+			// the FreeType function seems not thread-safe
+			gdimm_lock lock(LOCK_FREETYPE);
+			ft_error = FT_Glyph_To_Bitmap(reinterpret_cast<FT_Glyph *>(&bmp_glyph), render_mode, NULL, is_local_glyph);
+			if (ft_error != 0)
+				return NULL;
 		}
+
+		glyph_cache_instance.store_bmp_glyph(font_trait, glyph_index, true, bmp_glyph);
 	}
 
 	return reinterpret_cast<FT_Glyph>(bmp_glyph);
