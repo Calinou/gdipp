@@ -9,7 +9,7 @@ class gdimm_renderer
 protected:
 	int _char_extra;
 	const dc_context *_context;
-	uint64_t _font_trait;
+	unsigned int _font_trait;
 	FT_Render_Mode _render_mode;
 
 public:

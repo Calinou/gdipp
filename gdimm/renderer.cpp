@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "renderer.h"
+#include "MurmurHash2_64.h"
 #include "freetype.h"
 #include "helper_func.h"
 

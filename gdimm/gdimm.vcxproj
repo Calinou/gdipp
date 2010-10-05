@@ -22,6 +22,8 @@
     <ClInclude Include="com_override.h" />
     <ClInclude Include="dw_renderer.h" />
     <ClInclude Include="font_store.h" />
+    <ClInclude Include="MurmurHash2.h" />
+    <ClInclude Include="MurmurHash2_64.h" />
     <ClInclude Include="obj_reg.h" />
     <ClInclude Include="type_enum.h" />
     <ClInclude Include="font_link.h" />
@@ -37,7 +39,6 @@
     <ClInclude Include="helper_func.h" />
     <ClInclude Include="hook.h" />
     <ClInclude Include="lock.h" />
-    <ClInclude Include="MurmurHash2_64.h" />
     <ClInclude Include="os2_metrics.h" />
     <ClInclude Include="api_override.h" />
     <ClInclude Include="painter.h" />
@@ -65,10 +66,16 @@
     <ClCompile Include="helper_func.cpp" />
     <ClCompile Include="hook.cpp" />
     <ClCompile Include="lock.cpp" />
-    <ClCompile Include="MurmurHash2_64.cpp">
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
+    <ClCompile Include="MurmurHash2.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">NotUsing</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="MurmurHash2_64.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="obj_reg.cpp" />

@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "setting_cache.h"
+#include "MurmurHash2.h"
 #include "gdimm.h"
 #include "lock.h"
 
@@ -17,7 +18,7 @@ font_setting_cache::font_render_mode::font_render_mode()
 	pixel_geometry(PIXEL_GEOMETRY_RGB),
 	aliased_text(0)
 {
-};
+}
 
 font_setting_cache::font_shadow::font_shadow()
 	: offset_x(0),
@@ -38,15 +39,11 @@ font_setting_cache::font_setting_cache()
 
 const font_setting_cache *gdimm_setting_cache::lookup(const gdimm_setting_trait *setting_trait)
 {
-#ifdef _M_X64
-	uint64_t cache_trait = MurmurHash64A(setting_trait, sizeof(gdimm_setting_trait), 0);
-#else
-	uint64_t cache_trait = MurmurHash64B(setting_trait, sizeof(gdimm_setting_trait), 0);
-#endif // _M_X64
+	const unsigned int cache_trait = MurmurHash2(setting_trait, sizeof(gdimm_setting_trait), 0);
 
 	// if the setting for the specified font is not found
 	// construct setting cache for the font and return
-	map<uint64_t, font_setting_cache>::const_iterator iter = _cache.find(cache_trait);
+	map<unsigned int, font_setting_cache>::const_iterator iter = _cache.find(cache_trait);
 	if (iter == _cache.end())
 	{
 		// double-check lock

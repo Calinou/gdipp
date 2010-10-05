@@ -158,7 +158,7 @@ const FT_Glyph gdimm_ft_renderer::generate_glyph(WORD glyph_index,
 	FT_ULong load_flags,
 	bool is_italic,
 	bool request_outline,
-	uint64_t font_trait) const
+	unsigned int font_trait) const
 {
 	FT_Error ft_error;
 	FT_BitmapGlyph bmp_glyph;
@@ -198,7 +198,7 @@ bool gdimm_ft_renderer::generate_glyph_run(bool is_glyph_index, LPCWSTR lpString
 	wstring curr_font_face = metric_face_name(_context->outline_metrics);
 	const wchar_t *dc_font_family = metric_family_name(_context->outline_metrics);
 	const font_setting_cache *curr_setting_cache = _context->setting_cache;
-	uint64_t curr_font_trait = _font_trait;
+	unsigned int curr_font_trait = _font_trait;
 
 	long font_id = font_man.register_font(_context->hdc, curr_font_face.c_str());
 	if (font_id < 0)

@@ -71,7 +71,7 @@ bool initialize_cache_db()
 			b_ret = set_db_pragma(glyph_cache_db);
 			assert(b_ret);
 
-			i_ret = sqlite3_exec(glyph_cache_db, "CREATE TABLE IF NOT EXISTS bitmap_glyph ('font_trait' INTEGER NOT NULL, 'char_index' INTEGER NOT NULL, 'advance_x' INTEGER, 'advance_y' INTEGER, 'left' INTEGER, 'top' INTEGER, 'rows' INTEGER, 'width' INTEGER, 'pitch' INTEGER, 'buffer' BLOB, 'num_grays' INTEGER, 'pixel_mode' INTEGER, PRIMARY KEY ('font_trait', 'char_index'))", NULL, NULL, NULL);
+			i_ret = sqlite3_exec(glyph_cache_db, "CREATE TABLE IF NOT EXISTS bitmap_glyph ('char_id' INTEGER PRIMARY KEY NOT NULL UNIQUE, 'advance_x' INTEGER, 'advance_y' INTEGER, 'left' INTEGER, 'top' INTEGER, 'rows' INTEGER, 'width' INTEGER, 'pitch' INTEGER, 'buffer' BLOB, 'num_grays' INTEGER, 'pixel_mode' INTEGER)", NULL, NULL, NULL);
 			assert(i_ret == SQLITE_OK);
 		}
 		else

@@ -37,6 +37,12 @@
     <Filter Include="Source Files\font">
       <UniqueIdentifier>{5a8910fc-ab63-4889-80e3-3814b3796b68}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\hash">
+      <UniqueIdentifier>{e472adc1-b5d8-4fc1-9d94-5505c12fcab9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\hash">
+      <UniqueIdentifier>{206ea56a-ed1d-429f-b570-bbcb04ad1982}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="gamma.h">
@@ -55,9 +61,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="os2_metrics.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="MurmurHash2_64.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="wic_dib.h">
@@ -123,6 +126,12 @@
     <ClInclude Include="com_override.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="MurmurHash2.h">
+      <Filter>Header Files\hash</Filter>
+    </ClInclude>
+    <ClInclude Include="MurmurHash2_64.h">
+      <Filter>Header Files\hash</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="gamma.cpp">
@@ -138,9 +147,6 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="os2_metrics.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="MurmurHash2_64.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="freetype.cpp">
@@ -205,6 +211,12 @@
     </ClCompile>
     <ClCompile Include="api_override.cpp">
       <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="MurmurHash2_64.cpp">
+      <Filter>Source Files\hash</Filter>
+    </ClCompile>
+    <ClCompile Include="MurmurHash2.cpp">
+      <Filter>Source Files\hash</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
