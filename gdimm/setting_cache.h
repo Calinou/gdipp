@@ -1,19 +1,15 @@
 #pragma once
 
-using namespace std;
+#include "type_enum.h"
+#include "MurmurHash2_64.h"
+#include <gdipp_common.h>
 
-enum RENDERER_TYPE
-{
-	CLEARTYPE,
-	GETGLYPHOUTLINE,
-	FREETYPE
-};
+using namespace std;
 
 struct font_setting_cache
 {
 	struct font_gamma
 	{
-		double gray;
 		double red;
 		double green;
 		double blue;
@@ -21,38 +17,43 @@ struct font_setting_cache
 		font_gamma();
 	};
 
+	struct font_render_mode
+	{
+		BYTE mono;
+		BYTE gray;
+		BYTE subpixel;
+		PIXEL_GEOMETRY_TYPE pixel_geometry;
+		bool aliased_text;
+
+		font_render_mode();
+	};
+
 	struct font_shadow
 	{
 		LONG offset_x;
 		LONG offset_y;
-		WORD alpha;
+		BYTE alpha;
 
 		font_shadow();
 	};
 
-	bool auto_hinting;
+	BYTE auto_hinting;
 	bool embedded_bitmap;
 	FT_F26Dot6 embolden;
 	font_gamma gamma;
-	bool hinting;
-	bool light_mode;
-	LONG max_height;
-	bool render_mono;
-	bool render_non_aa;
+	BYTE hinting;
+	bool kerning;
+	font_render_mode render_mode;
 	RENDERER_TYPE renderer;
 	font_shadow shadow;
-	bool subpixel_render;
-	bool zero_alpha;
 
 	font_setting_cache();
 };
 
 class gdimm_setting_cache
 {
-	typedef map<const wstring, font_setting_cache> cache_map;
-
-	cache_map _cache;
+	map<uint64_t, font_setting_cache> _cache;
 
 public:
-	const font_setting_cache *lookup(const wchar_t *font_name);
+	const font_setting_cache *lookup(const gdimm_setting_trait *setting_trait);
 };

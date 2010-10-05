@@ -5,8 +5,6 @@
 
 #pragma once
 
-#include "targetver.h"
-
 #define WIN32_LEAN_AND_MEAN             // Exclude rarely-used stuff from Windows headers
 // Windows Header Files:
 #include <windows.h>
@@ -23,5 +21,5 @@
 #include <regex>
 #include <vector>
 
- // 3rd-party dependency libraries
+ // 3rd-party dependency
 #include <pugixml.hpp>

@@ -16,6 +16,20 @@ HINSTANCE h_instance;
 wchar_t curr_setting_path[MAX_PATH];
 wchar_t *preview_text = NULL;
 
+BOOL load_setting()
+{
+	BOOL b_ret;
+
+	// get setting file path
+	wchar_t setting_path[MAX_PATH];
+	b_ret = gdipp_get_dir_file_path(NULL, L"gdipp_setting.xml", setting_path);
+	if (!b_ret)
+		return FALSE;
+
+	gdipp_init_setting();
+	return gdipp_load_setting(setting_path);
+}
+
 int Run(LPTSTR /*lpstrCmdLine*/ = NULL, int nCmdShow = SW_SHOWDEFAULT)
 {
 	CMessageLoop theLoop;
@@ -55,8 +69,8 @@ int WINAPI _tWinMain(HINSTANCE hInstance, HINSTANCE /*hPrevInstance*/, LPTSTR lp
 	if (err == 0)
 	{
 		fseek(f, 0, SEEK_END);
- 		const long text_len = ftell(f);
- 		rewind(f);
+		const long text_len = ftell(f);
+		rewind(f);
 
 		preview_text = new wchar_t[text_len + 1];
 		const size_t bytes_read = fread(preview_text, sizeof(wchar_t), text_len, f);
@@ -75,6 +89,11 @@ int WINAPI _tWinMain(HINSTANCE hInstance, HINSTANCE /*hPrevInstance*/, LPTSTR lp
 #endif // _M_X64
 
 	h_gdimm = LoadLibraryW(gdimm_path);
+	if (h_gdimm == NULL)
+	{
+		b_ret = load_setting();
+		assert(b_ret);
+	}
 
 	// If you are running on NT 4.0 or higher you can use the following call instead to 
 	// make the EXE free threaded. This means that calls come in on a random RPC thread.

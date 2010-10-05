@@ -52,8 +52,8 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 0,7,6,0
- PRODUCTVERSION 0,7,6,0
+ FILEVERSION 0,9,2,0
+ PRODUCTVERSION 0,9,2,0
  FILEFLAGSMASK 0x17L
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -66,21 +66,21 @@ VS_VERSION_INFO VERSIONINFO
 BEGIN
     BLOCK "StringFileInfo"
     BEGIN
-        BLOCK "040904b0"
+        BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "gdipp Project"
-            VALUE "FileDescription", "gdimm_common"
-            VALUE "FileVersion", "0, 7, 6, 0"
+            VALUE "FileDescription", "gdipp Common"
+            VALUE "FileVersion", "0, 9, 2, 0"
             VALUE "InternalName", "gdipp_common"
             VALUE "LegalCopyright", "Copyright (C) gdipp Project 2010"
             VALUE "OriginalFilename", "gdipp_common.dll"
-            VALUE "ProductName", "gdimm"
-            VALUE "ProductVersion", "0, 7, 6, 0"
+            VALUE "ProductName", "gdipp Common"
+            VALUE "ProductVersion", "0, 9, 2, 0"
         END
     END
     BLOCK "VarFileInfo"
     BEGIN
-        VALUE "Translation", 0x409, 1200
+        VALUE "Translation", 0x409, 1252
     END
 END
 

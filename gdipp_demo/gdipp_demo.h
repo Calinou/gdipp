@@ -1,14 +1,14 @@
-// gdipp_demo.h
-
 #pragma once
 
 using namespace std;
 
- #define render
- #define test
-
+// demo settings
 extern int total_count;
-extern vector<const wstring> candidate_font;
+extern int thread_count;
 extern bool random_text;
+extern vector<const wstring> paint_fonts;
 
-extern wchar_t window_title[100];
+// gdimm related
+extern HMODULE h_gdimm;
+extern WCHAR gdimm_path[MAX_PATH];
+extern vector<HWND> paint_hwnd;

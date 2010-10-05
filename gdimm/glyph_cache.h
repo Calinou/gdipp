@@ -1,47 +1,37 @@
 #pragma once
 
+#include "helper_def.h"
+#include "helper_func.h"
+#include "lru.h"
+
 using namespace std;
 
 class gdimm_glyph_cache
 {
-public:
-	struct cache_trait
-	{
-		FTC_FaceID face_id;
-		FT_UInt width;
-		FT_UInt height;
-		FT_F26Dot6 embolden;
-		bool is_oblique;
-		FT_Render_Mode _render_mode;
-		FT_ULong _load_flags;
+	friend class gdimm_renderer;
 
-		bool operator==(const gdimm_glyph_cache::cache_trait &trait) const;
-	};
+	/*
+	map from character to its glyph
+	positive key stands for glyph index
+	negative key stands for Unicode code point
+	0 is not used for either
+	*/
+	typedef map<FT_Int, const FT_Glyph> index_to_glyph_map;
 
-private:
-	typedef map<FT_UInt, const FT_BitmapGlyph> cache_map;
-	
-	struct cache_node
-	{
-		cache_trait trait;
-		cache_map glyph_cache;
-		int ref_count;
+	// map from string hash to glyph run
+	typedef map<uint64_t, glyph_run> hash_to_run_map;
 
-		cache_node();
-	};
+	// map from font trait to data
+	map<uint64_t, index_to_glyph_map> _glyph_store;
+	map<uint64_t, hash_to_run_map> _glyph_run_store;
 
-	list<cache_node> _cache;
-	size_t _cached_bytes;
-
-	void erase_glyph_cache(const cache_map &glyph_cache);
+	// least recently used list font trait
+	lru_list<uint64_t> _glyph_run_lru;
 
 public:
-	gdimm_glyph_cache();
-
-	static void add_ref(const void *cache_node_ptr);
-	static void release(const void *cache_node_ptr);
-
-	const FT_BitmapGlyph lookup_glyph(const cache_trait &trait, FT_UInt glyph_index, const void *&cache_node_ptr);
-	void add_glyph(const cache_trait &trait, FT_UInt glyph_index, const FT_BitmapGlyph glyph, const void *&cache_node_ptr);
-	void clear();
+	const FT_Glyph lookup_glyph(uint64_t font_trait, FT_UInt index, bool is_glyph_index);
+	bool store_glyph(uint64_t font_trait, FT_UInt index, bool is_glyph_index, const FT_Glyph glyph);
+	bool lookup_glyph_run(uint64_t font_trait, uint64_t str_hash, glyph_run &a_glyph_run);
+	bool store_glyph_run(uint64_t font_trait, uint64_t str_hash, const glyph_run &a_glyph_run);
+	bool erase_font_trait(uint64_t font_trait);
 };

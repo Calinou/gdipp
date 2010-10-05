@@ -4,8 +4,7 @@
 CRITICAL_SECTION gdimm_lock::_cs[_LOCK_TYPE_COUNT_];
 
 gdimm_lock::gdimm_lock(LOCK_TYPE type)
-:
-_type(type)
+	: _type(type)
 {
 	EnterCriticalSection(&_cs[type]);
 }
@@ -21,7 +20,7 @@ void gdimm_lock::initialize()
 		InitializeCriticalSection(&_cs[i]);
 }
 
-void gdimm_lock::release()
+void gdimm_lock::finalize()
 {
 	for (int i = 0; i < _LOCK_TYPE_COUNT_; i++)
 		DeleteCriticalSection(&_cs[i]);

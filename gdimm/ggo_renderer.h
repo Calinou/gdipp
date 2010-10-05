@@ -2,19 +2,19 @@
 
 #include "renderer.h"
 
-class ggo_renderer: public gdimm_renderer
+class gdimm_ggo_renderer : public gdimm_renderer
 {
-	static const FT_Glyph_Class *_glyph_clazz;
+	static FT_Glyph empty_outline_glyph;
 
 	UINT _ggo_format;
 	MAT2 _matrix;
-	FT_Render_Mode _render_mode;
 
-	const FT_BitmapGlyph outline_to_bitmap(wchar_t ch, GLYPHMETRICS &glyph_metrics) const;
+	static void outline_ggo_to_ft(DWORD ggo_outline_buf_len, const BYTE *ggo_outline_buf, vector<FT_Vector> &curve_points, vector<char> &curve_tags, vector<short> &contour_indices);
+
+	bool get_glyph_metrics(wchar_t ch, GLYPHMETRICS &glyph_metrics) const;
+	const FT_Glyph outline_to_bitmap(wchar_t ch, GLYPHMETRICS &glyph_metrics) const;
+	bool render(bool is_glyph_index, bool is_pdy, LPCWSTR lpString, UINT c, CONST INT *lpDx, glyph_run &new_glyph_run);
 
 public:
-	ggo_renderer(gdimm_text *text);
-	~ggo_renderer();
-
-	bool render(UINT options, CONST RECT *lprect, LPCWSTR lpString, UINT c, CONST INT *lpDx, FT_Render_Mode render_mode);
+	gdimm_ggo_renderer();
 };

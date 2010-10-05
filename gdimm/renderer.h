@@ -1,34 +1,24 @@
 #pragma once
 
-#include "text.h"
-using namespace std;
-
-const double pi = acos(-1.0);
-
-// convert 16.16 fixed point to 26.6 format
-FT_F26Dot6 to_26dot6(const FIXED &fixed);
-
-// convert 16.16 fixed float type to integer
-LONG from_16dot16(FT_Pos fixed);
-
-// convert floating point to 16.16 format
-FT_Pos to_16dot16(double x);
+#include "glyph_cache.h"
 
 class gdimm_renderer
 {
+	virtual bool render(bool is_glyph_index, bool is_pdy, LPCWSTR lpString, UINT c, CONST INT *lpDx, glyph_run &new_glyph_run);
+
 protected:
-	gdimm_text *_text;
+	static gdimm_glyph_cache _glyph_cache;
+
 	int _char_extra;
-
-	vector<const FT_BitmapGlyph> _glyphs;
-	vector<POINT> _glyph_pos;
-
-	// gdimm_renderer cannot be instantiated directly
-	// also because it is abstract class
-	gdimm_renderer(gdimm_text *text);
+	const dc_context *_context;
+	uint64_t _font_trait;
+	FT_Render_Mode _render_mode;
 
 public:
-	bool render(UINT options, CONST RECT *lprect, LPCWSTR lpString, UINT c, CONST INT *lpDx, FT_Render_Mode render_mode) const;
-	const vector<const FT_BitmapGlyph> &get_glyphs() const;
-	const vector<POINT> &get_glyph_pos() const;
+	gdimm_renderer();
+	virtual ~gdimm_renderer();
+
+	virtual bool begin(const dc_context *context, FT_Render_Mode render_mode);
+	virtual void end();
+	bool fetch_glyph_run(bool is_glyph_index, bool is_pdy, LPCWSTR lpString, int c, CONST INT *lpDx, glyph_run &a_glyph_run);
 };

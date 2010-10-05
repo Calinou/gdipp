@@ -2,25 +2,31 @@
 
 #include "renderer.h"
 
-class ft_renderer: public gdimm_renderer
+class gdimm_ft_renderer : public gdimm_renderer
 {
-	FTC_ScalerRec _ft_scaler;
-	FT_Render_Mode _render_mode;
-	FT_ULong _load_flags;
-	FT_F26Dot6 _embolden;
-	bool _has_italic;
-	const void *_cache_node_ptr;
+	FT_F26Dot6 get_embolden(const font_setting_cache *setting_cache, char font_weight_class, char text_weight_class);
+	static void get_font_size(const OUTLINETEXTMETRICW *outline_metrics, FT_Short xAvgCharWidth, FT_UInt &font_width, FT_UInt &font_height);
+	static FT_ULong make_load_flags(const font_setting_cache *setting_cache, FT_Render_Mode render_mode);
+	static void oblique_outline(const FT_Outline *outline, double slant_adv);
 
-	static FT_ULong get_load_flags(FT_Render_Mode render_mode, const wchar_t *font_name);
-	static void oblique_outline(const FT_Outline *outline, double angle);
+	bool generate_outline_glyph(FT_Glyph *glyph,
+		WORD glyph_index,
+		const FTC_Scaler scaler,
+		FT_F26Dot6 embolden,
+		FT_ULong load_flags,
+		bool is_italic) const;
+	const FT_Glyph generate_bitmap_glyph(WORD glyph_index,
+		const FTC_Scaler scaler,
+		FT_Render_Mode render_mode,
+		FT_F26Dot6 embolden,
+		FT_ULong load_flags,
+		bool is_italic,
+		bool request_outline,
+		uint64_t font_trait) const;
+	bool generate_glyph_run(bool is_glyph_index, LPCWSTR lpString, UINT c, glyph_run &new_glyph_run, bool request_outline);
 
-	void update_embolden(const TT_OS2 &os2_table, const wchar_t *font_name);
-	const FT_BitmapGlyph render_glyph(WORD glyph_index, const wchar_t *font_face);
-	void update_glyph_pos(UINT options, CONST INT *lpDx);
+	bool render(bool is_glyph_index, bool is_pdy, LPCWSTR lpString, UINT c, CONST INT *lpDx, glyph_run &new_glyph_run);
 
 public:
-	ft_renderer(gdimm_text *text);
-	~ft_renderer();
-
-	bool render(UINT options, CONST RECT *lprect, LPCWSTR lpString, UINT c, CONST INT *lpDx, FT_Render_Mode render_mode);
+	const FT_OutlineGlyph get_outline_glyph(wchar_t glyph_char, bool is_glyph_index);
 };

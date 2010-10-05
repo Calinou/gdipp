@@ -1,18 +1,14 @@
 #include "stdafx.h"
 #include <gdipp_common.h>
 
-int APIENTRY wWinMain(
-	HINSTANCE hInstance,
-	HINSTANCE hPrevInstance,
-	LPWSTR    lpCmdLine,
-	int       nCmdShow)
+int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow)
 {
 	BOOL b_ret;
-	NTSTATUS eh_error;
+	NTSTATUS eh_ret;
 
 	if (lpCmdLine == NULL || wcslen(lpCmdLine) == 0)
 	{
-		MessageBox(NULL, TEXT("Drag an exe file to me and I will load it with gdimm.dll."), TEXT("gdipp Loader"), MB_OK | MB_ICONINFORMATION);
+		MessageBox(NULL, L"Drag an exe file to me and I will load it with gdimm.dll.", L"gdipp Loader", MB_OK | MB_ICONINFORMATION);
 		return EXIT_SUCCESS;
 	}
 
@@ -30,45 +26,53 @@ int APIENTRY wWinMain(
 	PROCESS_INFORMATION pi;
 	
 	b_ret = CreateProcessW(argv[0], lpCmdLine, NULL, NULL, FALSE, CREATE_SUSPENDED, NULL, working_dir, &si, &pi);
-	if (!b_ret)
-	{
-		MessageBoxW(NULL, L"Unable to create the target process.", L"gdipp Loader", MB_OK | MB_ICONERROR);
-		LocalFree(argv);
-		return EXIT_FAILURE;
-	}
-
-	const gdipp_inject_payload payload = {GDIPP_LOADER, NULL};
-	wchar_t gdimm_path[MAX_PATH];
-
-#ifdef _M_X64
-	b_ret = gdipp_get_dir_file_path(NULL, L"gdimm_64.dll", gdimm_path);
-	assert(b_ret);
-
-	eh_error = RhInjectLibrary(pi.dwProcessId, pi.dwThreadId, EASYHOOK_INJECT_DEFAULT, NULL, gdimm_path, (PVOID) &payload, sizeof(gdipp_inject_payload));
-#else
-	b_ret = gdipp_get_dir_file_path(NULL, L"gdimm_32.dll", gdimm_path);
-	assert(b_ret);
-
-	eh_error = RhInjectLibrary(pi.dwProcessId, pi.dwThreadId, EASYHOOK_INJECT_DEFAULT, gdimm_path, NULL, (PVOID) &payload, sizeof(gdipp_inject_payload));
-#endif // _M_X64
-
-	if (eh_error != 0)
-	{
-		b_ret = TerminateProcess(pi.hProcess, 0);
-		assert(b_ret);
-
-		wstring error_msg = L"Unable to inject gdimm.dll to the new process";
-
-		// STATUS_WOW_ASSERTION
-		if (eh_error == (NTSTATUS) 0xC0009898L)
-			error_msg += L" due to different bitness. Try the other gdipp Loader";
-
-		error_msg += L".";
-
-		MessageBoxW(NULL, error_msg.c_str(), L"gdipp Loader", MB_OK | MB_ICONERROR);
-	}
-
 	LocalFree(argv);
 
-	return EXIT_SUCCESS;
+	if (b_ret)
+	{
+#ifdef _M_X64
+		const wchar_t *gdimm_name = L"gdimm_64.dll";
+#else
+		const wchar_t *gdimm_name = L"gdimm_32.dll";
+#endif
+
+		wchar_t _gdimm_path[MAX_PATH];
+		b_ret = gdipp_get_dir_file_path(NULL, gdimm_name, _gdimm_path);
+		assert(b_ret);
+
+#ifdef _M_X64
+		eh_ret = RhInjectLibrary(pi.dwProcessId, pi.dwThreadId, EASYHOOK_INJECT_DEFAULT, NULL, _gdimm_path, NULL, 0);
+#else
+		eh_ret = RhInjectLibrary(pi.dwProcessId, pi.dwThreadId, EASYHOOK_INJECT_DEFAULT, _gdimm_path, NULL, NULL, 0);
+#endif
+
+		if (eh_ret == 0)
+		{
+			WaitForSingleObject(pi.hProcess, INFINITE);
+			CloseHandle(pi.hThread);
+			CloseHandle(pi.hProcess);
+			return EXIT_SUCCESS;
+		}
+		else
+		{
+			b_ret = TerminateProcess(pi.hProcess, 0);
+			assert(b_ret);
+
+			wstring error_msg = L"Unable to inject gdimm.dll to the new process";
+
+			// STATUS_WOW_ASSERTION
+			if (eh_ret == 0xC0009898L)
+				error_msg += L" due to different bitness. Try the other gdipp Loader";
+
+			error_msg += L".";
+
+			MessageBoxW(NULL, error_msg.c_str(), L"gdipp Loader", MB_OK | MB_ICONERROR);
+			return EXIT_FAILURE;
+		}
+	}
+	else
+	{
+		MessageBoxW(NULL, L"Unable to create the target process.", L"gdipp Loader", MB_OK | MB_ICONERROR);
+		return EXIT_FAILURE;
+	}
 }

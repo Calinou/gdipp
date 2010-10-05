@@ -5,8 +5,6 @@
 
 #pragma once
 
-#include "targetver.h"
-
 #define WIN32_LEAN_AND_MEAN             // Exclude rarely-used stuff from Windows headers
 // Windows Header Files:
 #include <windows.h>
@@ -14,9 +12,9 @@
 #include <shlwapi.h>
 
 // C RunTime Header Files
-#include <assert.h>
+#include <cassert>
 #include <string>
 #include <vector>
 
-// TODO: reference additional headers your program requires here
+// 3rd-party dependency
 #include <easyhook.h>

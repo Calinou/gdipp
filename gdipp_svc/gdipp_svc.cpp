@@ -1,20 +1,81 @@
 #include "stdafx.h"
-#include "gdipp_svc.h"
+#include <gdipp_common.h>
+
+using namespace std;
 
 #ifdef _M_X64
 #define SVC_NAME TEXT("gdipp_svc_64")
-#define SVC_EVENT_PREFIX L"Global\\gdipp_svc_event_64"
 #else
 #define SVC_NAME TEXT("gdipp_svc_32")
-#define SVC_EVENT_PREFIX L"Global\\gdipp_svc_event_32"
 #endif // _M_X64
 
-SERVICE_STATUS			svc_status = {};
-SERVICE_STATUS_HANDLE	svc_status_handle = NULL;
-HANDLE					svc_stop_event = NULL;
+SERVICE_STATUS svc_status = {};
+SERVICE_STATUS_HANDLE h_svc_status = NULL;
 
-svc_injector injector_instance;
-svc_mon mon_instance;
+HANDLE h_svc_events, h_wait_cleanup;
+
+wchar_t gdipp_hook_path[MAX_PATH];
+const size_t MAX_ENV_LEN = 64;
+wchar_t hook_env_str[MAX_ENV_LEN];
+
+map<ULONG, HANDLE> h_hook_events, h_user_tokens;
+map<ULONG, PROCESS_INFORMATION> pi_hooks;
+
+BOOL start_hook(ULONG session_id)
+{
+	BOOL b_ret;
+	HANDLE h_hook_event, h_user_token;
+
+	// this event handle is inheritable
+	SECURITY_ATTRIBUTES inheritable_sa = {sizeof(SECURITY_ATTRIBUTES), NULL, TRUE};
+	h_hook_event = CreateEvent(&inheritable_sa, TRUE, FALSE, NULL);
+	if (h_hook_event == NULL)
+		return FALSE;
+
+	b_ret = WTSQueryUserToken(session_id, &h_user_token);
+	if (!b_ret)
+		return FALSE;
+
+	// use the linked token if exists
+	// needed in UAC-enabled scenarios and Run As Administrator
+	TOKEN_LINKED_TOKEN linked_token;
+	DWORD token_info_len;
+	b_ret = GetTokenInformation(h_user_token, TokenLinkedToken, &linked_token, sizeof(TOKEN_LINKED_TOKEN), &token_info_len);
+	if (b_ret)
+	{
+		CloseHandle(h_user_token);
+		h_user_token = linked_token.LinkedToken;
+	}
+
+	swprintf_s(hook_env_str, L"h_gdipp_hook_wait=%p%c", h_hook_event, 0);
+	STARTUPINFOW si = {sizeof(STARTUPINFO)};
+	PROCESS_INFORMATION pi;
+	b_ret = CreateProcessAsUserW(h_user_token, gdipp_hook_path, NULL, NULL, NULL, TRUE, CREATE_UNICODE_ENVIRONMENT, hook_env_str, NULL, &si, &pi);
+	if (b_ret)
+	{
+		h_hook_events[session_id] = h_hook_event;
+		h_user_tokens[session_id] = h_user_token;
+		pi_hooks[session_id] = pi;
+	}
+	else
+	{
+		CloseHandle(h_hook_event);
+		CloseHandle(h_user_token);
+	}
+
+	return b_ret;
+}
+
+void stop_hook(ULONG session_id)
+{
+	SetEvent(h_hook_events[session_id]);
+	WaitForSingleObject(pi_hooks[session_id].hProcess, INFINITE);
+
+	CloseHandle(pi_hooks[session_id].hThread);
+	CloseHandle(pi_hooks[session_id].hProcess);
+	CloseHandle(h_user_tokens[session_id]);
+	CloseHandle(h_hook_events[session_id]);
+}
 
 VOID set_svc_status(DWORD dwCurrentState, DWORD dwWin32ExitCode, DWORD dwWaitHint)
 {
@@ -25,11 +86,10 @@ VOID set_svc_status(DWORD dwCurrentState, DWORD dwWin32ExitCode, DWORD dwWaitHin
 	svc_status.dwWin32ExitCode = dwWin32ExitCode;
 	svc_status.dwWaitHint = dwWaitHint;
 
-	if (dwCurrentState == SERVICE_START_PENDING)
-		// no control is accepted in start pending state
-		svc_status.dwControlsAccepted = 0;
+	if (dwCurrentState == SERVICE_RUNNING)
+		svc_status.dwControlsAccepted = SERVICE_ACCEPT_STOP | SERVICE_ACCEPT_SESSIONCHANGE;
 	else
-		svc_status.dwControlsAccepted = SERVICE_ACCEPT_STOP;
+		svc_status.dwControlsAccepted = 0;
 
 	if (dwCurrentState == SERVICE_RUNNING || dwCurrentState == SERVICE_STOPPED)
 		svc_status.dwCheckPoint = 0;
@@ -37,45 +97,68 @@ VOID set_svc_status(DWORD dwCurrentState, DWORD dwWin32ExitCode, DWORD dwWaitHin
 		svc_status.dwCheckPoint = dwCheckPoint++;
 
 	// report the status of the service to the SCM
-	SetServiceStatus(svc_status_handle, &svc_status);
+	SetServiceStatus(h_svc_status, &svc_status);
 }
 
-VOID WINAPI svc_ctrl_handler(DWORD dwCtrl)
+DWORD WINAPI svc_ctrl_handler(DWORD dwCtrl, DWORD dwEventType, LPVOID lpEventData, LPVOID lpContext)
 {
+	BOOL b_ret;
+
 	// handle the requested control code
 	switch (dwCtrl) 
 	{
 	case SERVICE_CONTROL_STOP:
 		set_svc_status(SERVICE_STOP_PENDING, NO_ERROR, 0);
-		SetEvent(svc_stop_event);
-		set_svc_status(svc_status.dwCurrentState, NO_ERROR, 0);
-		return;
+		
+		b_ret = SetEvent(h_svc_events);
+		assert(b_ret);
+
+		return NO_ERROR;
+	case SERVICE_CONTROL_INTERROGATE:
+		return NO_ERROR;
+	case SERVICE_CONTROL_SESSIONCHANGE:
+		if (dwEventType == WTS_SESSION_LOGON)
+		{
+			b_ret = start_hook(reinterpret_cast<WTSSESSION_NOTIFICATION *>(lpEventData)->dwSessionId);
+
+			if (b_ret)
+				return NO_ERROR;
+			else
+				return GetLastError();
+		}
+		else if (dwEventType == WTS_SESSION_LOGOFF)
+		{
+			stop_hook(reinterpret_cast<WTSSESSION_NOTIFICATION *>(lpEventData)->dwSessionId);
+			
+			return NO_ERROR;
+		}
+		else
+			return ERROR_CALL_NOT_IMPLEMENTED;
+	default:
+		return ERROR_CALL_NOT_IMPLEMENTED;
 	}
 }
 
-bool create_svc_event()
+VOID CALLBACK exit_cleanup(PVOID lpParameter, BOOLEAN TimerOrWaitFired)
 {
-	// create named event to synchronize between service and gdimm
+	BOOL b_ret;
 
-	// service event name = event name prefix + non-duplicable number (tick count)
-	// use this dynamic event name to avoid existing same-named event, opened by lingering gdimm.dll
-	wostringstream ss;
-	ss << SVC_EVENT_PREFIX;
-	ss << GetTickCount();
+	b_ret = UnregisterWait(h_wait_cleanup);
+	assert(b_ret || GetLastError() == ERROR_IO_PENDING);
 
-	svc_stop_event = CreateEventW(NULL, TRUE, FALSE, ss.str().c_str());
-	if (svc_stop_event == NULL)
-		return false;
+	for (map<ULONG, HANDLE>::const_iterator session_iter = h_hook_events.begin(); session_iter != h_hook_events.end(); session_iter++)
+		stop_hook(session_iter->first);
 
-	injector_instance.init_payload(ss.str().data());
-	return true;
+	set_svc_status(SERVICE_STOPPED, NO_ERROR, 0);
 }
 
 VOID WINAPI svc_main(DWORD dwArgc, LPTSTR *lpszArgv)
 {
+	BOOL b_ret;
+
 	// register the handler function for the service
-	svc_status_handle = RegisterServiceCtrlHandler(SVC_NAME, svc_ctrl_handler);
-	if (svc_status_handle == NULL)
+	h_svc_status = RegisterServiceCtrlHandlerExW(SVC_NAME, svc_ctrl_handler, NULL);
+	if (h_svc_status == NULL)
 		return;
 
 	// these SERVICE_STATUS members remain as set here
@@ -85,62 +168,79 @@ VOID WINAPI svc_main(DWORD dwArgc, LPTSTR *lpszArgv)
 	// report initial status to the SCM
 	set_svc_status(SERVICE_START_PENDING, NO_ERROR, INFINITE);
 
-	if (!create_svc_event())
+	h_svc_events = CreateEvent(NULL, TRUE, FALSE, NULL);
+	if (h_svc_events == NULL)
 	{
 		set_svc_status(SERVICE_STOPPED, NO_ERROR, 0);
 		return;
 	}
 
-	injector_instance.initial_inject();
+	b_ret = RegisterWaitForSingleObject(&h_wait_cleanup, h_svc_events, exit_cleanup, NULL, INFINITE, WT_EXECUTEDEFAULT | WT_EXECUTEONLYONCE);
+	assert(b_ret);
 
-	// monitor future processes
-	if (mon_instance.start_monitor())
+#ifdef _M_X64
+	const wchar_t *gdipp_hook_name = L"gdipp_hook_64.exe";
+#else
+	const wchar_t *gdipp_hook_name = L"gdipp_hook_32.exe";
+#endif
+
+	if (!gdipp_get_dir_file_path(NULL, gdipp_hook_name, gdipp_hook_path))
 	{
-		// report running status when initialization is complete
-		set_svc_status(SERVICE_RUNNING, NO_ERROR, 0);
-
-		// wait for stop event
-		WaitForSingleObject(svc_stop_event, INFINITE);
-
-		set_svc_status(SERVICE_STOP_PENDING, NO_ERROR, 0);
-
-		mon_instance.stop_monitor();
+		set_svc_status(SERVICE_STOPPED, NO_ERROR, 0);
+		return;
+	}
+	
+	/*
+	service process and its child processes run in session 0
+	some functions of gdipp Enumerator may require interactive session (session ID > 0)
+	use CreateProcessAsUser to create process in the active user's session
+	*/
+	const DWORD active_session_id = WTSGetActiveConsoleSessionId();
+	if (active_session_id != 0xFFFFFFFF)
+	{
+		b_ret = start_hook(active_session_id);
+		if (!b_ret)
+		{
+			// no user is logged into the system
+		}
 	}
 
-	set_svc_status(SERVICE_STOPPED, NO_ERROR, 0);
+	// report running status when initialization is complete
+	set_svc_status(SERVICE_RUNNING, NO_ERROR, 0);
 }
 
  // #define svc_debug
 
-int APIENTRY _tWinMain(
-	HINSTANCE hInstance,
-	HINSTANCE hPrevInstance,
-	LPTSTR    lpCmdLine,
-	int       nCmdShow)
+int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow)
 {
 #ifdef svc_debug
-	if (!create_svc_event())
+	BOOL b_ret;
+
+	h_svc_event = CreateEvent(NULL, TRUE, FALSE, NULL);
+	if (!b_ret)
 	{
 		set_svc_status(SERVICE_STOPPED, NO_ERROR, 0);
-		return 0;
+		return EXIT_FAILURE;
 	}
 
-	//injector_instance.initial_inject();
+	const size_t MAX_ENV_LEN = 64;
+	wchar_t env_str[MAX_ENV_LEN];
+	swprintf_s(env_str, L"gdipp_wait_handle=%p%c", h_svc_events, 0);
 
-	if (mon_instance.start_monitor())
-	{
-		Sleep(5000);
-		mon_instance.stop_monitor();
-	}
+	b_ret = start_hook();
+	if (!b_ret)
+		return EXIT_FAILURE;
+
+	Sleep(10000);
 #else
 	SERVICE_TABLE_ENTRY dispatch_table[] =
 	{
-		{ SVC_NAME, (LPSERVICE_MAIN_FUNCTION) svc_main },
+		{ SVC_NAME, svc_main },
 		{ NULL, NULL },
 	};
 
-	StartServiceCtrlDispatcher(dispatch_table);
+	StartServiceCtrlDispatcherW(dispatch_table);
 #endif // svc_debug
 
-	return 0;
+	return EXIT_SUCCESS;
 }

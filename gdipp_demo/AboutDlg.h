@@ -5,6 +5,8 @@
 #pragma once
 #include <atlcrack.h>
 
+#include "resource.h"
+
 class CAboutDlg : public CDialogImpl<CAboutDlg>
 {
 public:

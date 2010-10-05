@@ -5,8 +5,6 @@
 
 #pragma once
 
-#include "targetver.h"
-
 #define WIN32_LEAN_AND_MEAN             // Exclude rarely-used stuff from Windows headers
 
 #include <atlbase.h>
@@ -22,7 +20,6 @@ extern CAppModule _Module;
 
 // C RunTime Header Files
 #include <cassert>
-#include <ctime>
 #include <map>
 #include <sstream>
 #include <string>

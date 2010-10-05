@@ -1,41 +1,83 @@
 #include "stdafx.h"
 #include "renderer.h"
+#include "freetype.h"
 
-FT_F26Dot6 to_26dot6(const FIXED &fixed)
+gdimm_glyph_cache gdimm_renderer::_glyph_cache;
+
+gdimm_renderer::gdimm_renderer()
 {
-	return *((FT_F26Dot6*) &fixed) >> 10;
+	_glyph_cache._glyph_run_lru.resize(ft_cache_max_faces * ft_cache_max_sizes);
 }
 
-LONG from_16dot16(FT_Pos fixed)
+gdimm_renderer::~gdimm_renderer()
 {
-	return fixed >> 16;
 }
 
-// convert floating point to 16.16 format
-FT_Pos to_16dot16(double x)
+bool gdimm_renderer::render(bool is_glyph_index, bool is_pdy, LPCWSTR lpString, UINT c, CONST INT *lpDx, glyph_run &new_glyph_run)
 {
-	return (FT_Pos)(x * 65536);
+	return true;
 }
 
-gdimm_renderer::gdimm_renderer(gdimm_text *text)
-:
-_text(text)
+bool gdimm_renderer::begin(const dc_context *context, FT_Render_Mode render_mode)
 {
-	_char_extra = GetTextCharacterExtra(text->_hdc_text);
+	_context = context;
+	_render_mode = render_mode;
+
+	_char_extra = GetTextCharacterExtra(_context->hdc);
 	assert(_char_extra != 0x8000000);
+
+	_font_trait = generate_font_trait(_context->log_font, render_mode);
+
+	return true;
 }
 
-bool gdimm_renderer::render(UINT options, CONST RECT *lprect, LPCWSTR lpString, UINT c, CONST INT *lpDx, FT_Render_Mode render_mode) const
+void gdimm_renderer::end()
 {
-	return false;
 }
 
-const vector<const FT_BitmapGlyph> &gdimm_renderer::get_glyphs() const
+bool gdimm_renderer::fetch_glyph_run(bool is_glyph_index, bool is_pdy, LPCWSTR lpString, int c, CONST INT *lpDx, glyph_run &a_glyph_run)
 {
-	return _glyphs;
-}
+	bool b_ret;
 
-const vector<POINT> &gdimm_renderer::get_glyph_pos() const
-{
-	return _glyph_pos;
+	uint64_t erased_trait;
+	const bool overflow = _glyph_cache._glyph_run_lru.access(_font_trait, erased_trait);
+	if (overflow)
+	{
+		// erasing font trait may fail, in case that no glyph was successfully rendered
+		b_ret = _glyph_cache.erase_font_trait(erased_trait);
+	}
+
+#ifdef _M_X64
+	const uint64_t str_hash = MurmurHash64A(lpString, c * sizeof(WCHAR), is_glyph_index);
+#else
+	const uint64_t str_hash = MurmurHash64B(lpString, c * sizeof(WCHAR), is_glyph_index);
+#endif // _M_X64
+
+	static int total = 0;
+	static int cached = 0;
+
+	//b_ret = _glyph_cache.lookup_glyph_run(_font_trait, str_hash, a_glyph_run);
+	b_ret = false;
+	if (!b_ret)
+	{
+		// double-check lock
+		gdimm_lock lock(LOCK_GLYPH_RUN_CACHE);
+
+		b_ret = _glyph_cache.lookup_glyph_run(_font_trait, str_hash, a_glyph_run);
+		if (!b_ret)
+		{
+			const int glyph_run_height = render(is_glyph_index, is_pdy, lpString, c, lpDx, a_glyph_run);
+			if (glyph_run_height == 0)
+				return false;
+
+			//_glyph_cache.store_glyph_run(_font_trait, str_hash, a_glyph_run);
+		}
+	}
+	/*else
+		cached += 1;
+	total += 1;
+
+	gdipp_debug_decimal(static_cast<double>(cached) / total);*/
+
+	return true;
 }
